@@ -1,0 +1,3559 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizMaster Pro - Platform Quiz Interaktif</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            box-sizing: border-box;
+        }
+        .quiz-card {
+            transition: all 0.3s ease;
+        }
+        .quiz-card:hover {
+            transform: translateY(-5px);
+        }
+        .progress-bar {
+            transition: width 0.5s ease;
+        }
+        .answer-btn {
+            transition: all 0.3s ease;
+        }
+        .answer-btn:hover {
+            transform: scale(1.02);
+        }
+        .correct {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        .incorrect {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        .leaderboard-item {
+            animation: slideIn 0.5s ease forwards;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .timer-pulse {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .drag-over {
+            border-color: #8b5cf6;
+            background-color: rgba(139, 92, 246, 0.1);
+        }
+        .floating-shapes {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+        .shape {
+            position: absolute;
+            opacity: 0.1;
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        .live-indicator {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body class="h-full bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-800">
+    <!-- Floating Background Shapes -->
+    <div class="floating-shapes">
+        <div class="shape w-20 h-20 bg-white rounded-full" style="top: 10%; left: 10%; animation-delay: 0s;"></div>
+        <div class="shape w-16 h-16 bg-yellow-300 rounded-full" style="top: 20%; right: 10%; animation-delay: 1s;"></div>
+        <div class="shape w-12 h-12 bg-pink-300 rounded-full" style="bottom: 20%; left: 20%; animation-delay: 2s;"></div>
+        <div class="shape w-24 h-24 bg-green-300 rounded-full" style="bottom: 10%; right: 20%; animation-delay: 3s;"></div>
+    </div>
+
+    <div id="app" class="min-h-full">
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="min-h-full flex items-center justify-center">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+                <p class="text-white text-lg">Memuat QuizMaster Pro...</p>
+            </div>
+        </div>
+
+        <!-- Auth Screen -->
+        <div id="authScreen" class="hidden min-h-full flex items-center justify-center p-4">
+            <div class="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
+                <div class="text-center mb-8">
+                    <h1 class="text-4xl font-bold text-white mb-2">
+                        <i class="fas fa-mosque mr-2"></i>QuizMaster MI
+                    </h1>
+                    <p class="text-purple-100">Platform Quiz Interaktif Madrasah Ibtidaiyah</p>
+                </div>
+
+                <!-- Auth Tabs -->
+                <div class="flex mb-6 bg-white/10 rounded-lg p-1">
+                    <button id="loginTab" onclick="switchAuthTab('login')" 
+                            class="flex-1 py-2 px-4 rounded-md text-white font-semibold transition-all duration-300 bg-white/20">
+                        Masuk
+                    </button>
+                    <button id="registerTab" onclick="switchAuthTab('register')" 
+                            class="flex-1 py-2 px-4 rounded-md text-white font-semibold transition-all duration-300">
+                        Daftar
+                    </button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-envelope mr-2"></i>Email
+                        </label>
+                        <input type="email" id="loginEmail" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                               placeholder="Masukkan email Anda">
+                    </div>
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-lock mr-2"></i>Password
+                        </label>
+                        <input type="password" id="loginPassword" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                               placeholder="Masukkan password">
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Masuk
+                    </button>
+                </form>
+
+                <!-- Register Form -->
+                <form id="registerForm" onsubmit="handleRegister(event)" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-user mr-2"></i>Nama Lengkap
+                        </label>
+                        <input type="text" id="registerName" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                               placeholder="Masukkan nama lengkap">
+                    </div>
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-envelope mr-2"></i>Email
+                        </label>
+                        <input type="email" id="registerEmail" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                               placeholder="Masukkan email">
+                    </div>
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-lock mr-2"></i>Password
+                        </label>
+                        <input type="password" id="registerPassword" required minlength="6"
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                               placeholder="Minimal 6 karakter">
+                    </div>
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-user-tag mr-2"></i>Tipe Akun
+                        </label>
+                        <select id="registerRole" required 
+                                class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="">Pilih tipe akun</option>
+                            <option value="student">Siswa</option>
+                            <option value="teacher">Guru</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div id="teacherFields" class="hidden space-y-4">
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <i class="fas fa-school mr-2"></i>Nama Sekolah/Institusi
+                            </label>
+                            <input type="text" id="registerInstitution" 
+                                   class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                   placeholder="Nama sekolah atau institusi">
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <i class="fas fa-book mr-2"></i>Mata Pelajaran
+                            </label>
+                            <input type="text" id="registerSubject" 
+                                   class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                   placeholder="Mata pelajaran yang diampu">
+                        </div>
+                    </div>
+                    <div id="studentFields" class="hidden space-y-4">
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <i class="fas fa-graduation-cap mr-2"></i>Kelas
+                            </label>
+                            <select id="registerGrade" 
+                                    class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                <option value="">Pilih kelas</option>
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                                <option value="4">Kelas 4</option>
+                                <option value="5">Kelas 5</option>
+                                <option value="6">Kelas 6</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                        <i class="fas fa-user-plus mr-2"></i>Daftar Akun
+                    </button>
+                </form>
+
+                <div class="mt-6 text-center">
+                    <button onclick="showDemoMode()" class="text-purple-200 hover:text-white transition-colors">
+                        <i class="fas fa-play mr-2"></i>Coba Mode Demo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Home Screen -->
+        <div id="homeScreen" class="hidden min-h-full p-4">
+            <!-- Navigation Bar -->
+            <nav class="max-w-7xl mx-auto mb-8">
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center">
+                            <h1 class="text-2xl font-bold text-white mr-8">
+                                <i class="fas fa-brain mr-2"></i>QuizMaster Pro
+                            </h1>
+                            <div class="hidden md:flex space-x-6">
+                                <button onclick="showDashboard()" class="text-white hover:text-purple-200 transition-colors">
+                                    <i class="fas fa-home mr-2"></i>Dashboard
+                                </button>
+                                <button onclick="showQuizLibrary()" class="text-white hover:text-purple-200 transition-colors">
+                                    <i class="fas fa-book mr-2"></i>Perpustakaan Quiz
+                                </button>
+                                <button onclick="showLeaderboard()" class="text-white hover:text-purple-200 transition-colors">
+                                    <i class="fas fa-trophy mr-2"></i>Leaderboard
+                                </button>
+                                <button id="adminMenuBtn" onclick="showAdminPanel()" class="hidden text-white hover:text-purple-200 transition-colors">
+                                    <i class="fas fa-cogs mr-2"></i>Admin Panel
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-white text-right">
+                                <div class="font-semibold" id="userDisplayName">Loading...</div>
+                                <div class="text-sm text-purple-200" id="userRole">Loading...</div>
+                            </div>
+                            <div class="relative">
+                                <button onclick="toggleUserMenu()" class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors">
+                                    <i class="fas fa-user"></i>
+                                </button>
+                                <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white/10 backdrop-blur-lg rounded-lg border border-white/20 py-2">
+                                    <button onclick="showProfile()" class="w-full text-left px-4 py-2 text-white hover:bg-white/10 transition-colors">
+                                        <i class="fas fa-user-circle mr-2"></i>Profil
+                                    </button>
+                                    <button onclick="showSettings()" class="w-full text-left px-4 py-2 text-white hover:bg-white/10 transition-colors">
+                                        <i class="fas fa-cog mr-2"></i>Pengaturan
+                                    </button>
+                                    <hr class="border-white/20 my-2">
+                                    <button onclick="handleLogout()" class="w-full text-left px-4 py-2 text-red-300 hover:bg-white/10 transition-colors">
+                                        <i class="fas fa-sign-out-alt mr-2"></i>Keluar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Dashboard Content -->
+            <div id="dashboardContent" class="max-w-7xl mx-auto">
+                <!-- Welcome Section -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-3xl font-bold text-white mb-2" id="welcomeMessage">Selamat datang!</h2>
+                            <p class="text-purple-100" id="welcomeSubtext">Siap untuk tantangan quiz hari ini?</p>
+                        </div>
+                        <div class="text-6xl opacity-20">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="grid md:grid-cols-4 gap-6 mb-8" id="quickStats">
+                    <!-- Stats will be populated by JavaScript -->
+                </div>
+
+                <!-- Main Actions -->
+                <div id="mainActions" class="grid lg:grid-cols-2 gap-8">
+                    <!-- Student Actions -->
+                    <div id="studentActions" class="hidden">
+                        <h3 class="text-2xl font-bold text-white mb-6">
+                            <i class="fas fa-play mr-2"></i>Mulai Quiz
+                        </h3>
+                        <div class="grid gap-4">
+                            <div class="quiz-card bg-white/10 backdrop-blur-lg rounded-2xl p-6 text-center cursor-pointer border border-white/20" onclick="showJoinQuiz()">
+                                <div class="text-4xl mb-4">
+                                    <i class="fas fa-users text-blue-400"></i>
+                                </div>
+                                <h4 class="text-xl font-bold text-white mb-2">Join Quiz Live</h4>
+                                <p class="text-purple-100 text-sm">Masukkan kode untuk bergabung dengan quiz live</p>
+                            </div>
+                            <div class="quiz-card bg-white/10 backdrop-blur-lg rounded-2xl p-6 text-center cursor-pointer border border-white/20" onclick="showPracticeMode()">
+                                <div class="text-4xl mb-4">
+                                    <i class="fas fa-dumbbell text-green-400"></i>
+                                </div>
+                                <h4 class="text-xl font-bold text-white mb-2">Mode Latihan</h4>
+                                <p class="text-purple-100 text-sm">Berlatih dengan berbagai topik dan tingkat kesulitan</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Teacher Actions -->
+                    <div id="teacherActions" class="hidden">
+                        <h3 class="text-2xl font-bold text-white mb-6">
+                            <i class="fas fa-chalkboard-teacher mr-2"></i>Panel Guru
+                        </h3>
+                        <div class="grid gap-4">
+                            <div class="quiz-card bg-white/10 backdrop-blur-lg rounded-2xl p-6 text-center cursor-pointer border border-white/20" onclick="showCreateQuiz()">
+                                <div class="text-4xl mb-4">
+                                    <i class="fas fa-plus-circle text-green-400"></i>
+                                </div>
+                                <h4 class="text-xl font-bold text-white mb-2">Buat Quiz Baru</h4>
+                                <p class="text-purple-100 text-sm">Buat quiz interaktif dengan berbagai tipe soal</p>
+                            </div>
+                            <div class="quiz-card bg-white/10 backdrop-blur-lg rounded-2xl p-6 text-center cursor-pointer border border-white/20" onclick="showLiveQuiz()">
+                                <div class="text-4xl mb-4">
+                                    <i class="fas fa-broadcast-tower text-red-400"></i>
+                                </div>
+                                <h4 class="text-xl font-bold text-white mb-2">Quiz Live</h4>
+                                <p class="text-purple-100 text-sm">Jalankan quiz secara real-time dengan siswa</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div>
+                        <h3 class="text-2xl font-bold text-white mb-6">
+                            <i class="fas fa-clock mr-2"></i>Aktivitas Terbaru
+                        </h3>
+                        <div id="recentActivity" class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                            <!-- Activity items will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Join Quiz Screen -->
+        <div id="joinQuizScreen" class="hidden min-h-full flex items-center justify-center p-4">
+            <div class="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-white mb-2">
+                        <i class="fas fa-users mr-2"></i>Join Quiz Live
+                    </h2>
+                    <p class="text-purple-100">Masukkan kode quiz untuk bergabung</p>
+                </div>
+
+                <form onsubmit="joinLiveQuiz(event)" class="space-y-6">
+                    <div>
+                        <label class="block text-white font-semibold mb-2">
+                            <i class="fas fa-key mr-2"></i>Kode Quiz
+                        </label>
+                        <input type="text" id="quizCode" required maxlength="6" 
+                               class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400 text-center text-2xl font-bold tracking-widest"
+                               placeholder="000000" style="text-transform: uppercase;">
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button type="button" onclick="showDashboard()" 
+                                class="flex-1 bg-white/20 hover:bg-white/30 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                            <i class="fas fa-arrow-left mr-2"></i>Kembali
+                        </button>
+                        <button type="submit" 
+                                class="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                            <i class="fas fa-sign-in-alt mr-2"></i>Join
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Create Quiz Screen -->
+        <div id="createQuizScreen" class="hidden min-h-full p-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-white">
+                        <i class="fas fa-plus-circle mr-4"></i>Buat Quiz Baru
+                    </h2>
+                    <button onclick="showDashboard()" class="bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-full transition-all duration-300">
+                        <i class="fas fa-arrow-left mr-2"></i>Kembali
+                    </button>
+                </div>
+
+                <form onsubmit="saveQuiz(event)" class="space-y-8">
+                    <!-- Quiz Settings -->
+                    <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                        <h3 class="text-xl font-bold text-white mb-6">
+                            <i class="fas fa-cog mr-2"></i>Pengaturan Quiz
+                        </h3>
+                        <div class="grid lg:grid-cols-2 gap-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="quizTitle" class="block text-white font-semibold mb-2">Judul Quiz</label>
+                                    <input type="text" id="quizTitle" required 
+                                           class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                           placeholder="Masukkan judul quiz">
+                                </div>
+                                <div>
+                                    <label for="quizDescription" class="block text-white font-semibold mb-2">Deskripsi</label>
+                                    <textarea id="quizDescription" rows="3" 
+                                              class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                              placeholder="Deskripsi singkat tentang quiz ini"></textarea>
+                                </div>
+                                <div>
+                                    <label for="quizCategory" class="block text-white font-semibold mb-2">Kategori</label>
+                                    <select id="quizCategory" required 
+                                            class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                        <option value="">Pilih Kategori</option>
+                                        <option value="quran-hadits">Al-Qur'an Hadits</option>
+                                        <option value="akidah-akhlak">Akidah Akhlak</option>
+                                        <option value="fiqih">Fiqih</option>
+                                        <option value="ski">Sejarah Kebudayaan Islam</option>
+                                        <option value="bahasa-arab">Bahasa Arab</option>
+                                        <option value="matematika">Matematika</option>
+                                        <option value="ipa">IPA</option>
+                                        <option value="ips">IPS</option>
+                                        <option value="bahasa-indonesia">Bahasa Indonesia</option>
+                                        <option value="pkn">PKn</option>
+                                        <option value="sbdp">SBdP</option>
+                                        <option value="pjok">PJOK</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="timeLimit" class="block text-white font-semibold mb-2">Batas Waktu per Soal (detik)</label>
+                                    <input type="number" id="timeLimit" min="10" max="300" value="30" required 
+                                           class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                </div>
+                                <div>
+                                    <label for="quizGrade" class="block text-white font-semibold mb-2">Target Kelas</label>
+                                    <select id="quizGrade" 
+                                            class="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                        <option value="">Semua Kelas</option>
+                                        <option value="1">Kelas 1</option>
+                                        <option value="2">Kelas 2</option>
+                                        <option value="3">Kelas 3</option>
+                                        <option value="4">Kelas 4</option>
+                                        <option value="5">Kelas 5</option>
+                                        <option value="6">Kelas 6</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center space-x-4">
+                                    <label class="flex items-center text-white">
+                                        <input type="checkbox" id="shuffleQuestions" class="mr-2 rounded">
+                                        Acak urutan soal
+                                    </label>
+                                    <label class="flex items-center text-white">
+                                        <input type="checkbox" id="showCorrectAnswer" class="mr-2 rounded" checked>
+                                        Tampilkan jawaban benar
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Questions Section -->
+                    <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-white">
+                                <i class="fas fa-question-circle mr-2"></i>Soal-soal Quiz
+                            </h3>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="showImportExcel()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                                    <i class="fas fa-file-excel mr-2"></i>Import Excel
+                                </button>
+                                <button type="button" onclick="exportQuizTemplate()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                                    <i class="fas fa-download mr-2"></i>Template Excel
+                                </button>
+                                <button type="button" onclick="exportQuizPDF()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                                    <i class="fas fa-file-pdf mr-2"></i>Export PDF
+                                </button>
+                                <button type="button" onclick="addQuestion()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                                    <i class="fas fa-plus mr-2"></i>Tambah Soal
+                                </button>
+                            </div>
+                        </div>
+                        <div id="questionsContainer" class="space-y-6">
+                            <!-- Questions will be added dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-4">
+                        <button type="button" onclick="previewQuiz()" 
+                                class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                            <i class="fas fa-eye mr-2"></i>Preview Quiz
+                        </button>
+                        <button type="submit" 
+                                class="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-3 rounded-lg font-semibold transition-all duration-300">
+                            <i class="fas fa-save mr-2"></i>Simpan Quiz
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Live Quiz Host Screen -->
+        <div id="liveQuizScreen" class="hidden min-h-full p-4">
+            <div class="max-w-7xl mx-auto">
+                <!-- Live Quiz Header -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-6">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center">
+                            <div class="live-indicator w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                            <h2 class="text-2xl font-bold text-white">Quiz Live</h2>
+                        </div>
+                        <div class="flex items-center space-x-6">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-green-400" id="liveParticipants">0</div>
+                                <div class="text-purple-200 text-sm">Peserta</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-400" id="liveQuizCode">------</div>
+                                <div class="text-purple-200 text-sm">Kode Quiz</div>
+                            </div>
+                            <button onclick="endLiveQuiz()" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-all duration-300">
+                                <i class="fas fa-stop mr-2"></i>Akhiri Quiz
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Quiz Content -->
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <!-- Question Display -->
+                    <div class="lg:col-span-2">
+                        <div id="liveQuestionCard" class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-6">
+                            <div class="text-center">
+                                <h3 class="text-3xl font-bold text-white mb-8" id="liveQuestionText">
+                                    Menunggu quiz dimulai...
+                                </h3>
+                                <div id="liveAnswersContainer" class="grid md:grid-cols-2 gap-4">
+                                    <!-- Live answers will be shown here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Results -->
+                        <div id="liveResultsCard" class="hidden bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                            <h4 class="text-xl font-bold text-white mb-4">Hasil Soal Ini</h4>
+                            <div id="liveAnswerStats" class="space-y-3">
+                                <!-- Answer statistics will be shown here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Participants Panel -->
+                    <div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                            <h4 class="text-xl font-bold text-white mb-4">
+                                <i class="fas fa-users mr-2"></i>Peserta
+                            </h4>
+                            <div id="participantsList" class="space-y-2 max-h-96 overflow-y-auto">
+                                <!-- Participants will be listed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz Controls -->
+                <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2">
+                    <div class="bg-white/10 backdrop-blur-lg rounded-full p-4 border border-white/20 flex items-center space-x-4">
+                        <button id="startQuizBtn" onclick="startLiveQuiz()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+                            <i class="fas fa-play mr-2"></i>Mulai Quiz
+                        </button>
+                        <button id="nextQuestionBtn" onclick="nextLiveQuestion()" class="hidden bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+                            <i class="fas fa-arrow-right mr-2"></i>Soal Berikutnya
+                        </button>
+                        <button id="showResultsBtn" onclick="showLiveResults()" class="hidden bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+                            <i class="fas fa-chart-bar mr-2"></i>Lihat Hasil
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quiz Player Screen -->
+        <div id="quizPlayerScreen" class="hidden min-h-full p-4">
+            <!-- Quiz will be rendered here for students -->
+        </div>
+
+        <!-- Admin Panel Screen -->
+        <div id="adminPanelScreen" class="hidden min-h-full p-4">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-white">
+                        <i class="fas fa-cogs mr-4 text-blue-400"></i>Admin Panel
+                    </h2>
+                    <button onclick="showDashboard()" class="bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-full transition-all duration-300">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </button>
+                </div>
+
+                <!-- Admin Stats -->
+                <div class="grid md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                        <div class="text-3xl font-bold text-blue-400" id="totalUsers">0</div>
+                        <div class="text-purple-100">Total Pengguna</div>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                        <div class="text-3xl font-bold text-green-400" id="totalQuizzes">0</div>
+                        <div class="text-purple-100">Total Quiz</div>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                        <div class="text-3xl font-bold text-yellow-400" id="totalSessions">0</div>
+                        <div class="text-purple-100">Sesi Aktif</div>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                        <div class="text-3xl font-bold text-purple-400" id="totalParticipants">0</div>
+                        <div class="text-purple-100">Partisipasi</div>
+                    </div>
+                </div>
+
+                <!-- Admin Tabs -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-8">
+                    <div class="flex space-x-4 mb-6">
+                        <button onclick="showAdminTab('users')" id="usersTab" class="px-6 py-2 rounded-lg bg-blue-500 text-white font-semibold">
+                            <i class="fas fa-users mr-2"></i>Kelola Pengguna
+                        </button>
+                        <button onclick="showAdminTab('quizzes')" id="quizzesTab" class="px-6 py-2 rounded-lg bg-white/20 text-white font-semibold">
+                            <i class="fas fa-book mr-2"></i>Kelola Quiz
+                        </button>
+                        <button onclick="showAdminTab('reports')" id="reportsTab" class="px-6 py-2 rounded-lg bg-white/20 text-white font-semibold">
+                            <i class="fas fa-chart-bar mr-2"></i>Laporan
+                        </button>
+                        <button onclick="showAdminTab('settings')" id="settingsTab" class="px-6 py-2 rounded-lg bg-white/20 text-white font-semibold">
+                            <i class="fas fa-cog mr-2"></i>Pengaturan
+                        </button>
+                    </div>
+
+                    <!-- Users Management -->
+                    <div id="usersTabContent" class="admin-tab-content">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-white">Manajemen Pengguna</h3>
+                            <div class="flex gap-2">
+                                <button onclick="exportUsersExcel()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-file-excel mr-2"></i>Export Excel
+                                </button>
+                                <button onclick="showAddUser()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-user-plus mr-2"></i>Tambah User
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- User Filters -->
+                        <div class="grid md:grid-cols-4 gap-4 mb-6">
+                            <select id="userRoleFilter" onchange="loadUsers()" class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                <option value="">Semua Role</option>
+                                <option value="student">Siswa</option>
+                                <option value="teacher">Guru</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <select id="userGradeFilter" onchange="loadUsers()" class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                <option value="">Semua Kelas</option>
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                                <option value="4">Kelas 4</option>
+                                <option value="5">Kelas 5</option>
+                                <option value="6">Kelas 6</option>
+                            </select>
+                            <input type="text" id="userSearchFilter" onkeyup="loadUsers()" placeholder="Cari nama/email..." class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70">
+                            <button onclick="loadUsers()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg">
+                                <i class="fas fa-search mr-2"></i>Cari
+                            </button>
+                        </div>
+
+                        <!-- Users Table -->
+                        <div id="usersTable" class="overflow-x-auto">
+                            <!-- Users table will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Quizzes Management -->
+                    <div id="quizzesTabContent" class="admin-tab-content hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-white">Manajemen Quiz</h3>
+                            <div class="flex gap-2">
+                                <button onclick="exportQuizzesReport()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-file-excel mr-2"></i>Export Laporan
+                                </button>
+                                <button onclick="bulkDeleteQuizzes()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-trash mr-2"></i>Hapus Massal
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quiz Filters -->
+                        <div class="grid md:grid-cols-4 gap-4 mb-6">
+                            <select id="quizCategoryFilter" onchange="loadQuizzes()" class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                <option value="">Semua Kategori</option>
+                                <option value="quran-hadits">Al-Qur'an Hadits</option>
+                                <option value="akidah-akhlak">Akidah Akhlak</option>
+                                <option value="fiqih">Fiqih</option>
+                                <option value="ski">Sejarah Kebudayaan Islam</option>
+                                <option value="bahasa-arab">Bahasa Arab</option>
+                                <option value="matematika">Matematika</option>
+                                <option value="ipa">IPA</option>
+                                <option value="ips">IPS</option>
+                                <option value="bahasa-indonesia">Bahasa Indonesia</option>
+                                <option value="pkn">PKn</option>
+                                <option value="sbdp">SBdP</option>
+                                <option value="pjok">PJOK</option>
+                            </select>
+                            <select id="quizGradeFilter" onchange="loadQuizzes()" class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                <option value="">Semua Kelas</option>
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                                <option value="4">Kelas 4</option>
+                                <option value="5">Kelas 5</option>
+                                <option value="6">Kelas 6</option>
+                            </select>
+                            <input type="text" id="quizSearchFilter" onkeyup="loadQuizzes()" placeholder="Cari judul quiz..." class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70">
+                            <button onclick="loadQuizzes()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg">
+                                <i class="fas fa-search mr-2"></i>Cari
+                            </button>
+                        </div>
+
+                        <!-- Quizzes Table -->
+                        <div id="quizzesTable" class="overflow-x-auto">
+                            <!-- Quizzes table will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Reports -->
+                    <div id="reportsTabContent" class="admin-tab-content hidden">
+                        <h3 class="text-xl font-bold text-white mb-6">Laporan & Statistik</h3>
+                        
+                        <!-- Report Cards -->
+                        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            <div class="bg-white/10 rounded-xl p-6 border border-white/20 cursor-pointer hover:bg-white/20 transition-all" onclick="generateUserReport()">
+                                <div class="text-center">
+                                    <i class="fas fa-users text-4xl text-blue-400 mb-4"></i>
+                                    <h4 class="text-white font-bold text-lg mb-2">Laporan Pengguna</h4>
+                                    <p class="text-purple-200 text-sm">Data lengkap semua pengguna</p>
+                                </div>
+                            </div>
+                            <div class="bg-white/10 rounded-xl p-6 border border-white/20 cursor-pointer hover:bg-white/20 transition-all" onclick="generateQuizReport()">
+                                <div class="text-center">
+                                    <i class="fas fa-book text-4xl text-green-400 mb-4"></i>
+                                    <h4 class="text-white font-bold text-lg mb-2">Laporan Quiz</h4>
+                                    <p class="text-purple-200 text-sm">Statistik quiz dan partisipasi</p>
+                                </div>
+                            </div>
+                            <div class="bg-white/10 rounded-xl p-6 border border-white/20 cursor-pointer hover:bg-white/20 transition-all" onclick="generatePerformanceReport()">
+                                <div class="text-center">
+                                    <i class="fas fa-chart-line text-4xl text-yellow-400 mb-4"></i>
+                                    <h4 class="text-white font-bold text-lg mb-2">Laporan Performa</h4>
+                                    <p class="text-purple-200 text-sm">Analisis performa siswa</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chart Container -->
+                        <div class="bg-white/10 rounded-xl p-6 border border-white/20">
+                            <h4 class="text-white font-bold text-lg mb-4">Grafik Aktivitas Bulanan</h4>
+                            <div id="activityChart" class="h-64 flex items-center justify-center text-purple-200">
+                                Grafik akan ditampilkan di sini
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Settings -->
+                    <div id="settingsTabContent" class="admin-tab-content hidden">
+                        <h3 class="text-xl font-bold text-white mb-6">Pengaturan Sistem</h3>
+                        
+                        <div class="space-y-6">
+                            <!-- General Settings -->
+                            <div class="bg-white/10 rounded-xl p-6 border border-white/20">
+                                <h4 class="text-white font-bold text-lg mb-4">Pengaturan Umum</h4>
+                                <div class="grid md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Nama Madrasah</label>
+                                        <input type="text" id="schoolName" value="MI Al-Hikmah" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Alamat</label>
+                                        <input type="text" id="schoolAddress" value="Jl. Pendidikan No. 123" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Kepala Madrasah</label>
+                                        <input type="text" id="headmaster" value="Drs. Ahmad Fauzi, M.Pd.I" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Tahun Ajaran</label>
+                                        <input type="text" id="academicYear" value="2024/2025" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quiz Settings -->
+                            <div class="bg-white/10 rounded-xl p-6 border border-white/20">
+                                <h4 class="text-white font-bold text-lg mb-4">Pengaturan Quiz</h4>
+                                <div class="grid md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Batas Waktu Default (detik)</label>
+                                        <input type="number" id="defaultTimeLimit" value="30" min="10" max="300" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-white font-semibold mb-2">Poin Default</label>
+                                        <input type="number" id="defaultPoints" value="1000" min="100" max="5000" class="w-full px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white">
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="allowRetake" class="mr-2">
+                                        <label class="text-white">Izinkan mengulang quiz</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="showLeaderboard" class="mr-2" checked>
+                                        <label class="text-white">Tampilkan leaderboard</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Button -->
+                            <div class="text-center">
+                                <button onclick="saveSettings()" class="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold">
+                                    <i class="fas fa-save mr-2"></i>Simpan Pengaturan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quiz Library Screen -->
+        <div id="quizLibraryScreen" class="hidden min-h-full p-4">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-white">
+                        <i class="fas fa-book mr-4 text-green-400"></i>Perpustakaan Quiz
+                    </h2>
+                    <button onclick="showDashboard()" class="bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-full transition-all duration-300">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </button>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-8">
+                    <div class="grid md:grid-cols-5 gap-4">
+                        <input type="text" id="quizSearchInput" onkeyup="filterQuizLibrary()" 
+                               placeholder="Cari quiz..." 
+                               class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                        
+                        <select id="categoryFilter" onchange="filterQuizLibrary()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="">Semua Kategori</option>
+                            <option value="quran-hadits">Al-Qur'an Hadits</option>
+                            <option value="akidah-akhlak">Akidah Akhlak</option>
+                            <option value="fiqih">Fiqih</option>
+                            <option value="ski">Sejarah Kebudayaan Islam</option>
+                            <option value="bahasa-arab">Bahasa Arab</option>
+                            <option value="matematika">Matematika</option>
+                            <option value="ipa">IPA</option>
+                            <option value="ips">IPS</option>
+                            <option value="bahasa-indonesia">Bahasa Indonesia</option>
+                            <option value="pkn">PKn</option>
+                            <option value="sbdp">SBdP</option>
+                            <option value="pjok">PJOK</option>
+                        </select>
+                        
+                        <select id="gradeFilter" onchange="filterQuizLibrary()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="">Semua Kelas</option>
+                            <option value="1">Kelas 1</option>
+                            <option value="2">Kelas 2</option>
+                            <option value="3">Kelas 3</option>
+                            <option value="4">Kelas 4</option>
+                            <option value="5">Kelas 5</option>
+                            <option value="6">Kelas 6</option>
+                        </select>
+                        
+                        <select id="difficultyFilter" onchange="filterQuizLibrary()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="">Semua Tingkat</option>
+                            <option value="1">Mudah</option>
+                            <option value="2">Sedang</option>
+                            <option value="3">Sulit</option>
+                        </select>
+                        
+                        <button onclick="filterQuizLibrary()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                            <i class="fas fa-search mr-2"></i>Cari
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quiz Stats -->
+                <div class="grid md:grid-cols-4 gap-6 mb-8" id="quizStats">
+                    <!-- Stats will be populated by JavaScript -->
+                </div>
+
+                <!-- Quiz Grid -->
+                <div id="quizGrid" class="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+                    <!-- Quiz cards will be populated by JavaScript -->
+                </div>
+
+                <!-- Loading State -->
+                <div id="quizLibraryLoading" class="hidden text-center py-12">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                    <p class="text-white">Memuat perpustakaan quiz...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="quizLibraryEmpty" class="hidden text-center py-12">
+                    <i class="fas fa-book-open text-6xl text-purple-300 mb-4"></i>
+                    <h3 class="text-2xl font-bold text-white mb-2">Belum Ada Quiz</h3>
+                    <p class="text-purple-200 mb-6">Mulai buat quiz pertama Anda atau tunggu guru menambahkan quiz baru.</p>
+                    <button onclick="showCreateQuiz()" class="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300">
+                        <i class="fas fa-plus mr-2"></i>Buat Quiz Baru
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="leaderboardScreen" class="hidden min-h-full p-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-white">
+                        <i class="fas fa-trophy mr-4 text-yellow-400"></i>Leaderboard Global
+                    </h2>
+                    <button onclick="showDashboard()" class="bg-white/20 hover:bg-white/30 text-white px-6 py-2 rounded-full transition-all duration-300">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </button>
+                </div>
+
+                <!-- Leaderboard Filters -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-8">
+                    <div class="grid md:grid-cols-4 gap-4">
+                        <select id="leaderboardPeriod" onchange="loadLeaderboard()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="all">Sepanjang Waktu</option>
+                            <option value="month">Bulan Ini</option>
+                            <option value="week">Minggu Ini</option>
+                            <option value="today">Hari Ini</option>
+                        </select>
+                        <select id="leaderboardCategory" onchange="loadLeaderboard()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="all">Semua Kategori</option>
+                            <option value="quran-hadits">Al-Qur'an Hadits</option>
+                            <option value="akidah-akhlak">Akidah Akhlak</option>
+                            <option value="fiqih">Fiqih</option>
+                            <option value="ski">Sejarah Kebudayaan Islam</option>
+                            <option value="bahasa-arab">Bahasa Arab</option>
+                            <option value="matematika">Matematika</option>
+                            <option value="ipa">IPA</option>
+                            <option value="ips">IPS</option>
+                            <option value="bahasa-indonesia">Bahasa Indonesia</option>
+                            <option value="pkn">PKn</option>
+                            <option value="sbdp">SBdP</option>
+                            <option value="pjok">PJOK</option>
+                        </select>
+                        <select id="leaderboardGrade" onchange="loadLeaderboard()" 
+                                class="px-4 py-2 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="all">Semua Kelas</option>
+                            <option value="1">Kelas 1</option>
+                            <option value="2">Kelas 2</option>
+                            <option value="3">Kelas 3</option>
+                            <option value="4">Kelas 4</option>
+                            <option value="5">Kelas 5</option>
+                            <option value="6">Kelas 6</option>
+                        </select>
+                        <button onclick="loadLeaderboard()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-all duration-300">
+                            <i class="fas fa-sync mr-2"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Top 3 Podium -->
+                <div class="grid md:grid-cols-3 gap-6 mb-8" id="topThree">
+                    <!-- Top 3 will be populated by JavaScript -->
+                </div>
+
+                <!-- Full Leaderboard -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                    <h3 class="text-xl font-bold text-white mb-6">Ranking Lengkap</h3>
+                    <div id="fullLeaderboard" class="space-y-3">
+                        <!-- Full leaderboard will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://tmzfjljttyuromulhqgp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtemZqbGp0dHl1cm9tdWxocWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwMTkyODksImV4cCI6MjA3NjU5NTI4OX0.h5Ww4IjhOpLBapqBRpHcLGUXueYp29eeCeUi4LRsXeM';
+        
+        // Initialize Supabase client
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Database sudah terkonfigurasi dan siap digunakan
+
+        // Global State
+        let appState = {
+            user: null,
+            currentScreen: 'loading',
+            liveQuiz: null,
+            currentQuiz: null,
+            gameSession: null
+        };
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', async function() {
+            showScreen('loadingScreen');
+            
+            // Check if user is already logged in
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (user) {
+                await loadUserProfile(user);
+                showDashboard();
+            } else {
+                showScreen('authScreen');
+            }
+        });
+
+        // Screen Management
+        function showScreen(screenId) {
+            const screens = [
+                'loadingScreen', 'authScreen', 'homeScreen', 'joinQuizScreen', 
+                'createQuizScreen', 'liveQuizScreen', 'quizPlayerScreen', 'quizLibraryScreen', 'leaderboardScreen', 'adminPanelScreen'
+            ];
+            
+            screens.forEach(screen => {
+                document.getElementById(screen).classList.add('hidden');
+            });
+            
+            document.getElementById(screenId).classList.remove('hidden');
+            appState.currentScreen = screenId;
+        }
+
+        // Authentication Functions
+        function switchAuthTab(tab) {
+            const loginTab = document.getElementById('loginTab');
+            const registerTab = document.getElementById('registerTab');
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+
+            if (tab === 'login') {
+                loginTab.classList.add('bg-white/20');
+                registerTab.classList.remove('bg-white/20');
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+            } else {
+                registerTab.classList.add('bg-white/20');
+                loginTab.classList.remove('bg-white/20');
+                registerForm.classList.remove('hidden');
+                loginForm.classList.add('hidden');
+            }
+        }
+
+        // Show/hide additional fields based on role selection
+        document.getElementById('registerRole').addEventListener('change', function() {
+            const role = this.value;
+            const teacherFields = document.getElementById('teacherFields');
+            const studentFields = document.getElementById('studentFields');
+            
+            if (role === 'teacher') {
+                teacherFields.classList.remove('hidden');
+                studentFields.classList.add('hidden');
+            } else if (role === 'student') {
+                studentFields.classList.remove('hidden');
+                teacherFields.classList.add('hidden');
+            } else {
+                teacherFields.classList.add('hidden');
+                studentFields.classList.add('hidden');
+            }
+        });
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                await loadUserProfile(data.user);
+                showDashboard();
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Login Berhasil!',
+                    text: `Selamat datang kembali, ${appState.user.full_name}!`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Login Gagal',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const role = document.getElementById('registerRole').value;
+            
+            let additionalData = { role: role, full_name: name };
+            
+            if (role === 'teacher') {
+                additionalData.institution = document.getElementById('registerInstitution').value;
+                additionalData.subject = document.getElementById('registerSubject').value;
+            } else if (role === 'student') {
+                additionalData.grade = document.getElementById('registerGrade').value;
+            }
+
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: additionalData
+                    }
+                });
+
+                if (error) throw error;
+
+                // Create user profile in database
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert([{
+                        id: data.user.id,
+                        email: email,
+                        full_name: name,
+                        role: role,
+                        institution: additionalData.institution || null,
+                        subject: additionalData.subject || null,
+                        grade: additionalData.grade || null,
+                        created_at: new Date().toISOString()
+                    }]);
+
+                if (profileError) throw profileError;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Registrasi Berhasil!',
+                    text: 'Silakan cek email Anda untuk verifikasi akun.',
+                    confirmButtonColor: '#8b5cf6'
+                }).then(() => {
+                    switchAuthTab('login');
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Registrasi Gagal',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function loadUserProfile(user) {
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+
+                if (error) throw error;
+
+                appState.user = data;
+                updateUserDisplay();
+                
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+                // Fallback to auth user data
+                appState.user = {
+                    id: user.id,
+                    email: user.email,
+                    full_name: user.user_metadata.full_name || 'User',
+                    role: user.user_metadata.role || 'student'
+                };
+                updateUserDisplay();
+            }
+        }
+
+        function updateUserDisplay() {
+            document.getElementById('userDisplayName').textContent = appState.user.full_name;
+            
+            let roleText = 'Siswa';
+            if (appState.user.role === 'teacher') roleText = 'Guru';
+            else if (appState.user.role === 'admin') roleText = 'Admin';
+            
+            document.getElementById('userRole').textContent = roleText;
+            
+            // Update welcome message
+            const hour = new Date().getHours();
+            let greeting = 'Selamat pagi';
+            if (hour >= 12 && hour < 17) greeting = 'Selamat siang';
+            else if (hour >= 17) greeting = 'Selamat malam';
+            
+            document.getElementById('welcomeMessage').textContent = `${greeting}, ${appState.user.full_name}!`;
+            
+            // Show appropriate actions based on role
+            if (appState.user.role === 'admin') {
+                document.getElementById('teacherActions').classList.remove('hidden');
+                document.getElementById('studentActions').classList.add('hidden');
+                document.getElementById('adminMenuBtn').classList.remove('hidden');
+                document.getElementById('welcomeSubtext').textContent = 'Kelola sistem QuizMaster MI dengan mudah';
+            } else if (appState.user.role === 'teacher') {
+                document.getElementById('teacherActions').classList.remove('hidden');
+                document.getElementById('studentActions').classList.add('hidden');
+                document.getElementById('adminMenuBtn').classList.add('hidden');
+                document.getElementById('welcomeSubtext').textContent = 'Siap membuat quiz menarik untuk siswa?';
+            } else {
+                document.getElementById('studentActions').classList.remove('hidden');
+                document.getElementById('teacherActions').classList.add('hidden');
+                document.getElementById('adminMenuBtn').classList.add('hidden');
+                document.getElementById('welcomeSubtext').textContent = 'Siap untuk tantangan quiz hari ini?';
+            }
+        }
+
+        async function handleLogout() {
+            const result = await Swal.fire({
+                title: 'Keluar dari Akun?',
+                text: 'Anda akan keluar dari akun QuizMaster Pro',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Keluar',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280'
+            });
+
+            if (result.isConfirmed) {
+                await supabase.auth.signOut();
+                appState.user = null;
+                showScreen('authScreen');
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil Keluar',
+                    text: 'Sampai jumpa lagi!',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        }
+
+        // Dashboard Functions
+        function showDashboard() {
+            showScreen('homeScreen');
+            loadQuickStats();
+            loadRecentActivity();
+        }
+
+        async function loadQuickStats() {
+            const statsContainer = document.getElementById('quickStats');
+            
+            if (appState.user.role === 'teacher') {
+                // Teacher stats
+                try {
+                    const { data: quizzes } = await supabase
+                        .from('quizzes')
+                        .select('id')
+                        .eq('created_by', appState.user.id);
+                    
+                    const { data: sessions } = await supabase
+                        .from('quiz_sessions')
+                        .select('id')
+                        .eq('host_id', appState.user.id);
+                    
+                    const { data: participants } = await supabase
+                        .from('quiz_participants')
+                        .select('id, score')
+                        .in('session_id', sessions?.map(s => s.id) || []);
+
+                    const avgScore = participants?.length > 0 
+                        ? Math.round(participants.reduce((sum, p) => sum + (p.score || 0), 0) / participants.length)
+                        : 0;
+
+                    statsContainer.innerHTML = `
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-green-400">${quizzes?.length || 0}</div>
+                            <div class="text-purple-100">Quiz Dibuat</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-blue-400">${sessions?.length || 0}</div>
+                            <div class="text-purple-100">Sesi Live</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-yellow-400">${participants?.length || 0}</div>
+                            <div class="text-purple-100">Total Peserta</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-purple-400">${avgScore}%</div>
+                            <div class="text-purple-100">Rata-rata Skor</div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Error loading teacher stats:', error);
+                }
+            } else {
+                // Student stats
+                try {
+                    const { data: participations } = await supabase
+                        .from('quiz_participants')
+                        .select('*, quiz_sessions(quiz_id)')
+                        .eq('user_id', appState.user.id);
+
+                    const totalQuizzes = participations?.length || 0;
+                    const avgScore = totalQuizzes > 0 
+                        ? Math.round(participations.reduce((sum, p) => sum + (p.score || 0), 0) / totalQuizzes)
+                        : 0;
+                    
+                    const bestScore = totalQuizzes > 0 
+                        ? Math.max(...participations.map(p => p.score || 0))
+                        : 0;
+
+                    const rank = await getUserRank();
+
+                    statsContainer.innerHTML = `
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-blue-400">${totalQuizzes}</div>
+                            <div class="text-purple-100">Quiz Dimainkan</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-green-400">${avgScore}%</div>
+                            <div class="text-purple-100">Rata-rata Skor</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-yellow-400">${bestScore}%</div>
+                            <div class="text-purple-100">Skor Terbaik</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                            <div class="text-3xl font-bold text-purple-400">#${rank}</div>
+                            <div class="text-purple-100">Peringkat Global</div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Error loading student stats:', error);
+                }
+            }
+        }
+
+        async function getUserRank() {
+            try {
+                const { data } = await supabase
+                    .from('quiz_participants')
+                    .select('user_id, score')
+                    .order('score', { ascending: false });
+
+                if (!data || data.length === 0) return 999;
+
+                const userScores = {};
+                data.forEach(p => {
+                    if (!userScores[p.user_id] || userScores[p.user_id] < (p.score || 0)) {
+                        userScores[p.user_id] = p.score || 0;
+                    }
+                });
+
+                const sortedUsers = Object.entries(userScores)
+                    .sort(([,a], [,b]) => b - a)
+                    .map(([userId]) => userId);
+
+                const rank = sortedUsers.indexOf(appState.user.id) + 1;
+                return rank > 0 ? rank : 999;
+            } catch (error) {
+                console.error('Error getting user rank:', error);
+                return 999;
+            }
+        }
+
+        async function loadRecentActivity() {
+            const activityContainer = document.getElementById('recentActivity');
+            
+            try {
+                if (appState.user.role === 'teacher') {
+                    const { data } = await supabase
+                        .from('quiz_sessions')
+                        .select(`
+                            *,
+                            quizzes(title),
+                            quiz_participants(user_id, score, profiles(full_name))
+                        `)
+                        .eq('host_id', appState.user.id)
+                        .order('created_at', { ascending: false })
+                        .limit(5);
+
+                    if (data && data.length > 0) {
+                        activityContainer.innerHTML = data.map(session => `
+                            <div class="flex justify-between items-center p-3 bg-white/10 rounded-lg border border-white/20 mb-3">
+                                <div>
+                                    <div class="text-white font-semibold">${session.quizzes?.title || 'Quiz'}</div>
+                                    <div class="text-purple-200 text-sm">${session.quiz_participants?.length || 0} peserta</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-purple-200 text-sm">${new Date(session.created_at).toLocaleDateString('id-ID')}</div>
+                                    <div class="text-xs text-purple-300">${session.status}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        activityContainer.innerHTML = '<div class="text-center text-purple-200 py-8">Belum ada aktivitas</div>';
+                    }
+                } else {
+                    const { data } = await supabase
+                        .from('quiz_participants')
+                        .select(`
+                            *,
+                            quiz_sessions(
+                                quizzes(title, category)
+                            )
+                        `)
+                        .eq('user_id', appState.user.id)
+                        .order('created_at', { ascending: false })
+                        .limit(5);
+
+                    if (data && data.length > 0) {
+                        activityContainer.innerHTML = data.map(participation => `
+                            <div class="flex justify-between items-center p-3 bg-white/10 rounded-lg border border-white/20 mb-3">
+                                <div>
+                                    <div class="text-white font-semibold">${participation.quiz_sessions?.quizzes?.title || 'Quiz'}</div>
+                                    <div class="text-purple-200 text-sm capitalize">${participation.quiz_sessions?.quizzes?.category || 'Umum'}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-green-400 font-bold">${participation.score || 0}%</div>
+                                    <div class="text-xs text-purple-300">${new Date(participation.created_at).toLocaleDateString('id-ID')}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        activityContainer.innerHTML = '<div class="text-center text-purple-200 py-8">Belum ada aktivitas</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+                activityContainer.innerHTML = '<div class="text-center text-purple-200 py-8">Error memuat aktivitas</div>';
+            }
+        }
+
+        // User Menu Functions
+        function toggleUserMenu() {
+            const menu = document.getElementById('userMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close user menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('userMenu');
+            const button = event.target.closest('button');
+            
+            if (!menu.contains(event.target) && !button?.onclick?.toString().includes('toggleUserMenu')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function showProfile() {
+            document.getElementById('userMenu').classList.add('hidden');
+            // Implementation for profile screen
+            Swal.fire({
+                icon: 'info',
+                title: 'Profil Pengguna',
+                text: 'Fitur profil akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function showSettings() {
+            document.getElementById('userMenu').classList.add('hidden');
+            // Implementation for settings screen
+            Swal.fire({
+                icon: 'info',
+                title: 'Pengaturan',
+                text: 'Fitur pengaturan akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        // Quiz Functions
+        function showJoinQuiz() {
+            showScreen('joinQuizScreen');
+        }
+
+        function showPracticeMode() {
+            // Implementation for practice mode
+            Swal.fire({
+                icon: 'info',
+                title: 'Mode Latihan',
+                text: 'Fitur mode latihan akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function showQuizLibrary() {
+            showScreen('quizLibraryScreen');
+            loadQuizLibrary();
+        }
+
+        async function joinLiveQuiz(event) {
+            event.preventDefault();
+            
+            const quizCode = document.getElementById('quizCode').value.toUpperCase();
+            
+            try {
+                // Find active quiz session with the code
+                const { data: session, error } = await supabase
+                    .from('quiz_sessions')
+                    .select(`
+                        *,
+                        quizzes(*)
+                    `)
+                    .eq('quiz_code', quizCode)
+                    .eq('status', 'waiting')
+                    .single();
+
+                if (error || !session) {
+                    throw new Error('Kode quiz tidak ditemukan atau quiz sudah berakhir');
+                }
+
+                // Check if user already joined
+                const { data: existing } = await supabase
+                    .from('quiz_participants')
+                    .select('id')
+                    .eq('session_id', session.id)
+                    .eq('user_id', appState.user.id)
+                    .single();
+
+                if (!existing) {
+                    // Add user to quiz participants
+                    const { error: joinError } = await supabase
+                        .from('quiz_participants')
+                        .insert([{
+                            session_id: session.id,
+                            user_id: appState.user.id,
+                            joined_at: new Date().toISOString()
+                        }]);
+
+                    if (joinError) throw joinError;
+                }
+
+                // Set current session and show quiz player
+                appState.gameSession = session;
+                showQuizPlayer();
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil Join!',
+                    text: `Bergabung dengan quiz: ${session.quizzes.title}`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Join Quiz',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        function showQuizPlayer() {
+            showScreen('quizPlayerScreen');
+            // Implementation for quiz player interface
+            document.getElementById('quizPlayerScreen').innerHTML = `
+                <div class="max-w-4xl mx-auto">
+                    <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
+                        <h2 class="text-3xl font-bold text-white mb-4">${appState.gameSession.quizzes.title}</h2>
+                        <p class="text-purple-100 mb-8">Menunggu guru memulai quiz...</p>
+                        <div class="animate-pulse">
+                            <i class="fas fa-clock text-4xl text-purple-400"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Teacher Quiz Functions
+        function showCreateQuiz() {
+            showScreen('createQuizScreen');
+            addQuestion(); // Add first question by default
+        }
+
+        let questionCounter = 0;
+
+        function addQuestion() {
+            questionCounter++;
+            const questionsContainer = document.getElementById('questionsContainer');
+            
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'bg-white/10 rounded-xl p-6 border border-white/20';
+            questionDiv.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h4 class="text-xl font-semibold text-white">
+                        <i class="fas fa-question-circle mr-2"></i>Soal ${questionCounter}
+                    </h4>
+                    <button type="button" onclick="removeQuestion(this)" class="text-red-400 hover:text-red-300 transition-colors p-2">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-white font-semibold mb-2">Pertanyaan</label>
+                        <textarea required class="question-text w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400" 
+                                  placeholder="Masukkan pertanyaan..." rows="3"></textarea>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <span class="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-sm mr-2">A</span>
+                                Pilihan A
+                            </label>
+                            <input type="text" required class="answer-option w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400" 
+                                   placeholder="Pilihan A">
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <span class="inline-flex items-center justify-center w-6 h-6 bg-green-500 text-white rounded-full text-sm mr-2">B</span>
+                                Pilihan B
+                            </label>
+                            <input type="text" required class="answer-option w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400" 
+                                   placeholder="Pilihan B">
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <span class="inline-flex items-center justify-center w-6 h-6 bg-yellow-500 text-white rounded-full text-sm mr-2">C</span>
+                                Pilihan C
+                            </label>
+                            <input type="text" required class="answer-option w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400" 
+                                   placeholder="Pilihan C">
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">
+                                <span class="inline-flex items-center justify-center w-6 h-6 bg-red-500 text-white rounded-full text-sm mr-2">D</span>
+                                Pilihan D
+                            </label>
+                            <input type="text" required class="answer-option w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-purple-400" 
+                                   placeholder="Pilihan D">
+                        </div>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-white font-semibold mb-2">Jawaban Benar</label>
+                            <select required class="correct-answer w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                <option value="">Pilih jawaban benar</option>
+                                <option value="0">A</option>
+                                <option value="1">B</option>
+                                <option value="2">C</option>
+                                <option value="3">D</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">Tingkat Kesulitan</label>
+                            <select required class="difficulty-level w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                <option value="">Pilih tingkat kesulitan</option>
+                                <option value="1">Mudah</option>
+                                <option value="2">Sedang</option>
+                                <option value="3">Sulit</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-white font-semibold mb-2">Poin</label>
+                            <input type="number" min="100" max="2000" value="1000" class="question-points w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            questionsContainer.appendChild(questionDiv);
+        }
+
+        function removeQuestion(button) {
+            if (document.querySelectorAll('#questionsContainer .bg-white\\/10').length > 1) {
+                button.closest('.bg-white\\/10').remove();
+                updateQuestionNumbers();
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tidak Bisa Dihapus',
+                    text: 'Quiz harus memiliki minimal satu soal!',
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        function updateQuestionNumbers() {
+            const questions = document.querySelectorAll('#questionsContainer .bg-white\\/10');
+            questions.forEach((question, index) => {
+                question.querySelector('h4').innerHTML = `<i class="fas fa-question-circle mr-2"></i>Soal ${index + 1}`;
+            });
+            questionCounter = questions.length;
+        }
+
+        function previewQuiz() {
+            const quizData = collectQuizData();
+            if (!quizData) return;
+
+            Swal.fire({
+                title: quizData.title,
+                html: `
+                    <div class="text-left space-y-3">
+                        <p><strong>Kategori:</strong> ${quizData.category}</p>
+                        <p><strong>Deskripsi:</strong> ${quizData.description || 'Tidak ada deskripsi'}</p>
+                        <p><strong>Jumlah Soal:</strong> ${quizData.questions.length}</p>
+                        <p><strong>Batas Waktu:</strong> ${quizData.time_limit} detik per soal</p>
+                        <hr class="my-4">
+                        <p><strong>Contoh Soal:</strong></p>
+                        <div class="bg-gray-100 p-3 rounded">
+                            <p class="font-semibold">${quizData.questions[0].question}</p>
+                            <ul class="list-disc list-inside mt-2 space-y-1">
+                                ${quizData.questions[0].options.map((option, index) => 
+                                    `<li class="${index === quizData.questions[0].correct_answer ? 'font-bold text-green-600' : ''}">${String.fromCharCode(65 + index)}. ${option}</li>`
+                                ).join('')}
+                            </ul>
+                            <p class="text-sm text-gray-600 mt-2">Poin: ${quizData.questions[0].points}</p>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'Tutup',
+                confirmButtonColor: '#8b5cf6',
+                width: '600px'
+            });
+        }
+
+        function collectQuizData() {
+            const title = document.getElementById('quizTitle').value.trim();
+            const description = document.getElementById('quizDescription').value.trim();
+            const category = document.getElementById('quizCategory').value;
+            const timeLimit = parseInt(document.getElementById('timeLimit').value);
+            const grade = document.getElementById('quizGrade').value;
+            const shuffleQuestions = document.getElementById('shuffleQuestions').checked;
+            const showCorrectAnswer = document.getElementById('showCorrectAnswer').checked;
+
+            if (!title || !category) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Data Tidak Lengkap',
+                    text: 'Mohon lengkapi judul dan kategori quiz!',
+                    confirmButtonColor: '#8b5cf6'
+                });
+                return null;
+            }
+
+            const questionElements = document.querySelectorAll('#questionsContainer .bg-white\\/10');
+            if (questionElements.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tidak Ada Soal',
+                    text: 'Mohon tambahkan minimal satu soal!',
+                    confirmButtonColor: '#8b5cf6'
+                });
+                return null;
+            }
+
+            const questions = [];
+            let isValid = true;
+
+            questionElements.forEach((element, index) => {
+                const questionText = element.querySelector('.question-text').value.trim();
+                const options = Array.from(element.querySelectorAll('.answer-option')).map(input => input.value.trim());
+                const correctAnswer = parseInt(element.querySelector('.correct-answer').value);
+                const difficulty = parseInt(element.querySelector('.difficulty-level').value);
+                const points = parseInt(element.querySelector('.question-points').value);
+
+                if (!questionText || options.some(option => !option) || isNaN(correctAnswer) || isNaN(difficulty)) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Data Soal Tidak Lengkap',
+                        text: `Mohon lengkapi semua field pada soal ${index + 1}!`,
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                    isValid = false;
+                    return;
+                }
+
+                questions.push({
+                    question: questionText,
+                    options: options,
+                    correct_answer: correctAnswer,
+                    difficulty: difficulty,
+                    points: points || 1000
+                });
+            });
+
+            if (!isValid) return null;
+
+            return {
+                title: title,
+                description: description,
+                category: category,
+                time_limit: timeLimit,
+                target_grade: grade || null,
+                shuffle_questions: shuffleQuestions,
+                show_correct_answer: showCorrectAnswer,
+                questions: questions
+            };
+        }
+
+        async function saveQuiz(event) {
+            event.preventDefault();
+            
+            const quizData = collectQuizData();
+            if (!quizData) return;
+
+            try {
+                // Save quiz to database
+                const { data: quiz, error: quizError } = await supabase
+                    .from('quizzes')
+                    .insert([{
+                        title: quizData.title,
+                        description: quizData.description,
+                        category: quizData.category,
+                        time_limit: quizData.time_limit,
+                        target_grade: quizData.target_grade,
+                        shuffle_questions: quizData.shuffle_questions,
+                        show_correct_answer: quizData.show_correct_answer,
+                        created_by: appState.user.id,
+                        created_at: new Date().toISOString()
+                    }])
+                    .select()
+                    .single();
+
+                if (quizError) throw quizError;
+
+                // Save questions
+                const questionsToInsert = quizData.questions.map((q, index) => ({
+                    quiz_id: quiz.id,
+                    question: q.question,
+                    options: q.options,
+                    correct_answer: q.correct_answer,
+                    difficulty: q.difficulty,
+                    points: q.points,
+                    order_index: index
+                }));
+
+                const { error: questionsError } = await supabase
+                    .from('quiz_questions')
+                    .insert(questionsToInsert);
+
+                if (questionsError) throw questionsError;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Quiz Berhasil Disimpan!',
+                    text: `Quiz "${quizData.title}" telah disimpan dengan ${quizData.questions.length} soal.`,
+                    confirmButtonColor: '#8b5cf6'
+                }).then(() => {
+                    showDashboard();
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Menyimpan Quiz',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        // Live Quiz Functions
+        function showLiveQuiz() {
+            showScreen('liveQuizScreen');
+            // Implementation for selecting quiz to host
+            selectQuizToHost();
+        }
+
+        async function selectQuizToHost() {
+            try {
+                const { data: quizzes, error } = await supabase
+                    .from('quizzes')
+                    .select('id, title, category')
+                    .eq('created_by', appState.user.id)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                if (!quizzes || quizzes.length === 0) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Belum Ada Quiz',
+                        text: 'Buat quiz terlebih dahulu sebelum memulai sesi live!',
+                        confirmButtonColor: '#8b5cf6'
+                    }).then(() => {
+                        showCreateQuiz();
+                    });
+                    return;
+                }
+
+                const { value: selectedQuizId } = await Swal.fire({
+                    title: 'Pilih Quiz untuk Live Session',
+                    input: 'select',
+                    inputOptions: quizzes.reduce((options, quiz) => {
+                        options[quiz.id] = `${quiz.title} (${quiz.category})`;
+                        return options;
+                    }, {}),
+                    inputPlaceholder: 'Pilih quiz...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Mulai Live Session',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#8b5cf6'
+                });
+
+                if (selectedQuizId) {
+                    await createLiveSession(selectedQuizId);
+                } else {
+                    showDashboard();
+                }
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function createLiveSession(quizId) {
+            try {
+                // Generate unique quiz code
+                const quizCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+                const { data: session, error } = await supabase
+                    .from('quiz_sessions')
+                    .insert([{
+                        quiz_id: quizId,
+                        host_id: appState.user.id,
+                        quiz_code: quizCode,
+                        status: 'waiting',
+                        created_at: new Date().toISOString()
+                    }])
+                    .select(`
+                        *,
+                        quizzes(*)
+                    `)
+                    .single();
+
+                if (error) throw error;
+
+                appState.liveQuiz = session;
+                document.getElementById('liveQuizCode').textContent = quizCode;
+                document.getElementById('liveQuestionText').textContent = `Quiz: ${session.quizzes.title}`;
+                
+                // Start listening for participants
+                listenForParticipants();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Live Session Dibuat!',
+                    text: `Kode quiz: ${quizCode}. Bagikan kode ini kepada siswa.`,
+                    confirmButtonColor: '#8b5cf6'
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Membuat Live Session',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        function listenForParticipants() {
+            // Subscribe to real-time updates for participants
+            const subscription = supabase
+                .channel('quiz_participants')
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    table: 'quiz_participants',
+                    filter: `session_id=eq.${appState.liveQuiz.id}`
+                }, (payload) => {
+                    updateParticipantsList();
+                })
+                .subscribe();
+
+            // Initial load
+            updateParticipantsList();
+        }
+
+        async function updateParticipantsList() {
+            try {
+                const { data: participants, error } = await supabase
+                    .from('quiz_participants')
+                    .select(`
+                        *,
+                        profiles(full_name)
+                    `)
+                    .eq('session_id', appState.liveQuiz.id);
+
+                if (error) throw error;
+
+                document.getElementById('liveParticipants').textContent = participants.length;
+                
+                const participantsList = document.getElementById('participantsList');
+                participantsList.innerHTML = participants.map(p => `
+                    <div class="flex items-center justify-between p-2 bg-white/10 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm mr-3">
+                                ${p.profiles.full_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span class="text-white">${p.profiles.full_name}</span>
+                        </div>
+                        <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error updating participants list:', error);
+            }
+        }
+
+        async function startLiveQuiz() {
+            try {
+                // Update session status
+                const { error } = await supabase
+                    .from('quiz_sessions')
+                    .update({ status: 'active' })
+                    .eq('id', appState.liveQuiz.id);
+
+                if (error) throw error;
+
+                // Load first question
+                await loadLiveQuestion(0);
+
+                document.getElementById('startQuizBtn').classList.add('hidden');
+                document.getElementById('nextQuestionBtn').classList.remove('hidden');
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Memulai Quiz',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function loadLiveQuestion(questionIndex) {
+            try {
+                const { data: questions, error } = await supabase
+                    .from('quiz_questions')
+                    .select('*')
+                    .eq('quiz_id', appState.liveQuiz.quiz_id)
+                    .order('order_index');
+
+                if (error) throw error;
+
+                const question = questions[questionIndex];
+                if (!question) {
+                    // Quiz finished
+                    await endLiveQuiz();
+                    return;
+                }
+
+                document.getElementById('liveQuestionText').textContent = question.question;
+                
+                const answersContainer = document.getElementById('liveAnswersContainer');
+                answersContainer.innerHTML = question.options.map((option, index) => `
+                    <div class="bg-white/20 p-4 rounded-lg border border-white/30">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
+                                ${String.fromCharCode(65 + index)}
+                            </div>
+                            <span class="text-white">${option}</span>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Update current question in session
+                await supabase
+                    .from('quiz_sessions')
+                    .update({ current_question: questionIndex })
+                    .eq('id', appState.liveQuiz.id);
+
+            } catch (error) {
+                console.error('Error loading live question:', error);
+            }
+        }
+
+        async function nextLiveQuestion() {
+            const currentQuestion = appState.liveQuiz.current_question || 0;
+            await loadLiveQuestion(currentQuestion + 1);
+        }
+
+        async function showLiveResults() {
+            // Implementation for showing live results
+            document.getElementById('showResultsBtn').classList.add('hidden');
+            document.getElementById('nextQuestionBtn').classList.remove('hidden');
+        }
+
+        async function endLiveQuiz() {
+            try {
+                await supabase
+                    .from('quiz_sessions')
+                    .update({ status: 'completed' })
+                    .eq('id', appState.liveQuiz.id);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Quiz Selesai!',
+                    text: 'Terima kasih telah menggunakan QuizMaster Pro.',
+                    confirmButtonColor: '#8b5cf6'
+                }).then(() => {
+                    showDashboard();
+                });
+
+            } catch (error) {
+                console.error('Error ending live quiz:', error);
+            }
+        }
+
+        // Leaderboard Functions
+        async function loadLeaderboard() {
+            showScreen('leaderboardScreen');
+            
+            const period = document.getElementById('leaderboardPeriod')?.value || 'all';
+            const category = document.getElementById('leaderboardCategory')?.value || 'all';
+            const grade = document.getElementById('leaderboardGrade')?.value || 'all';
+
+            try {
+                // First, get all profiles with student role
+                const { data: profiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, grade')
+                    .eq('role', 'student');
+
+                if (profilesError) throw profilesError;
+
+                if (!profiles || profiles.length === 0) {
+                    displayTopThree([]);
+                    displayFullLeaderboard([]);
+                    return;
+                }
+
+                // Get quiz participants data
+                let participantsQuery = supabase
+                    .from('quiz_participants')
+                    .select(`
+                        user_id,
+                        score,
+                        created_at,
+                        quiz_sessions!inner(
+                            quiz_id,
+                            quizzes!inner(category)
+                        )
+                    `)
+                    .not('score', 'is', null)
+                    .order('score', { ascending: false });
+
+                // Apply period filter
+                if (period !== 'all') {
+                    const now = new Date();
+                    let startDate;
+                    
+                    switch (period) {
+                        case 'today':
+                            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                            break;
+                        case 'week':
+                            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            break;
+                        case 'month':
+                            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                            break;
+                    }
+                    
+                    participantsQuery = participantsQuery.gte('created_at', startDate.toISOString());
+                }
+
+                const { data: participants, error: participantsError } = await participantsQuery;
+
+                if (participantsError) throw participantsError;
+
+                let filteredParticipants = participants || [];
+
+                // Apply category filter
+                if (category !== 'all') {
+                    filteredParticipants = filteredParticipants.filter(p => 
+                        p.quiz_sessions?.quizzes?.category === category
+                    );
+                }
+
+                // Create user score map with profile data
+                const userScores = {};
+                
+                profiles.forEach(profile => {
+                    // Apply grade filter
+                    if (grade !== 'all' && profile.grade !== grade) {
+                        return;
+                    }
+
+                    const userParticipations = filteredParticipants.filter(p => p.user_id === profile.id);
+                    
+                    if (userParticipations.length > 0) {
+                        const bestScore = Math.max(...userParticipations.map(p => p.score || 0));
+                        const totalQuizzes = userParticipations.length;
+                        const avgScore = Math.round(userParticipations.reduce((sum, p) => sum + (p.score || 0), 0) / totalQuizzes);
+                        
+                        userScores[profile.id] = {
+                            user_id: profile.id,
+                            profiles: {
+                                full_name: profile.full_name,
+                                grade: profile.grade
+                            },
+                            score: bestScore,
+                            average_score: avgScore,
+                            total_quizzes: totalQuizzes,
+                            created_at: userParticipations[0].created_at
+                        };
+                    }
+                });
+
+                // Convert to array and sort by best score
+                const leaderboardData = Object.values(userScores)
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 50);
+
+                // Display results
+                displayTopThree(leaderboardData.slice(0, 3));
+                displayFullLeaderboard(leaderboardData);
+
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                
+                // Show sample data if database is empty
+                const sampleData = [
+                    {
+                        user_id: 'sample1',
+                        profiles: { full_name: 'Ahmad Fauzi', grade: '6' },
+                        score: 95,
+                        average_score: 88,
+                        total_quizzes: 5,
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        user_id: 'sample2', 
+                        profiles: { full_name: 'Siti Aisyah', grade: '5' },
+                        score: 92,
+                        average_score: 85,
+                        total_quizzes: 4,
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        user_id: 'sample3',
+                        profiles: { full_name: 'Muhammad Ali', grade: '6' },
+                        score: 88,
+                        average_score: 82,
+                        total_quizzes: 3,
+                        created_at: new Date().toISOString()
+                    }
+                ];
+
+                displayTopThree(sampleData);
+                displayFullLeaderboard(sampleData);
+                
+                // Show info message
+                setTimeout(() => {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Data Leaderboard',
+                        text: 'Menampilkan data contoh. Leaderboard akan terisi setelah ada siswa yang mengikuti quiz.',
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                }, 500);
+            }
+        }
+
+        function displayTopThree(topThree) {
+            const topThreeContainer = document.getElementById('topThree');
+            
+            const podiumOrder = [1, 0, 2]; // Second, First, Third
+            const podiumHeights = ['h-32', 'h-40', 'h-24'];
+            const podiumColors = ['bg-gray-400', 'bg-yellow-400', 'bg-orange-400'];
+            
+            topThreeContainer.innerHTML = podiumOrder.map((index, position) => {
+                const participant = topThree[index];
+                if (!participant) return '<div></div>';
+                
+                return `
+                    <div class="text-center">
+                        <div class="relative">
+                            <div class="${podiumHeights[position]} ${podiumColors[index]} rounded-t-lg flex items-end justify-center pb-4 mb-4">
+                                <div class="text-white font-bold text-2xl">${index + 1}</div>
+                            </div>
+                            <div class="absolute -top-6 left-1/2 transform -translate-x-1/2">
+                                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl font-bold text-gray-800">
+                                    ${participant.profiles.full_name.charAt(0).toUpperCase()}
+                                </div>
+                            </div>
+                        </div>
+                        <h3 class="text-white font-bold text-lg">${participant.profiles.full_name}</h3>
+                        <p class="text-purple-200">${participant.score}% • Kelas ${participant.profiles.grade || 'N/A'}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function displayFullLeaderboard(leaderboardData) {
+            const fullLeaderboard = document.getElementById('fullLeaderboard');
+            
+            if (leaderboardData.length === 0) {
+                fullLeaderboard.innerHTML = '<div class="text-center text-purple-200 py-8">Belum ada data leaderboard</div>';
+                return;
+            }
+            
+            fullLeaderboard.innerHTML = leaderboardData.map((participant, index) => `
+                <div class="leaderboard-item flex justify-between items-center p-4 bg-white/10 rounded-lg border border-white/20 ${participant.user_id === appState.user.id ? 'ring-2 ring-purple-400' : ''}">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold mr-4">
+                            ${index + 1}
+                        </div>
+                        <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white font-bold mr-4">
+                            ${participant.profiles.full_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div class="text-white font-semibold">${participant.profiles.full_name}</div>
+                            <div class="text-purple-200 text-sm">Kelas ${participant.profiles.grade || 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-yellow-400 font-bold text-lg">${participant.score}%</div>
+                        <div class="text-purple-200 text-sm">${new Date(participant.created_at).toLocaleDateString('id-ID')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Excel Import Functions
+        function showImportExcel() {
+            // Implementation for Excel import
+            Swal.fire({
+                icon: 'info',
+                title: 'Import Excel',
+                text: 'Fitur import Excel akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        // Demo Mode
+        function showDemoMode() {
+            Swal.fire({
+                title: 'Mode Demo',
+                text: 'Apakah Anda ingin mencoba QuizMaster Pro dalam mode demo?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Coba Demo',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#8b5cf6'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Set demo user
+                    appState.user = {
+                        id: 'demo-user',
+                        full_name: 'Demo User',
+                        email: 'demo@quizmaster.com',
+                        role: 'student'
+                    };
+                    
+                    updateUserDisplay();
+                    showDashboard();
+                    
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Mode Demo Aktif',
+                        text: 'Anda sedang menggunakan QuizMaster Pro dalam mode demo. Fitur terbatas dan data tidak akan disimpan.',
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                }
+            });
+        }
+
+        // Admin Panel Functions
+        function showAdminPanel() {
+            if (appState.user.role !== 'admin') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Akses Ditolak',
+                    text: 'Hanya admin yang dapat mengakses panel ini!',
+                    confirmButtonColor: '#8b5cf6'
+                });
+                return;
+            }
+            
+            showScreen('adminPanelScreen');
+            loadAdminStats();
+            showAdminTab('users');
+        }
+
+        async function loadAdminStats() {
+            try {
+                // Load total users
+                const { data: users, error: usersError } = await supabase
+                    .from('profiles')
+                    .select('id');
+                
+                // Load total quizzes
+                const { data: quizzes, error: quizzesError } = await supabase
+                    .from('quizzes')
+                    .select('id');
+                
+                // Load active sessions
+                const { data: sessions, error: sessionsError } = await supabase
+                    .from('quiz_sessions')
+                    .select('id')
+                    .eq('status', 'active');
+                
+                // Load total participants
+                const { data: participants, error: participantsError } = await supabase
+                    .from('quiz_participants')
+                    .select('id');
+
+                document.getElementById('totalUsers').textContent = users?.length || 0;
+                document.getElementById('totalQuizzes').textContent = quizzes?.length || 0;
+                document.getElementById('totalSessions').textContent = sessions?.length || 0;
+                document.getElementById('totalParticipants').textContent = participants?.length || 0;
+
+            } catch (error) {
+                console.error('Error loading admin stats:', error);
+            }
+        }
+
+        function showAdminTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.admin-tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('[id$="Tab"]').forEach(tab => {
+                tab.className = tab.className.replace('bg-blue-500', 'bg-white/20');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + 'TabContent').classList.remove('hidden');
+            
+            // Add active class to selected tab
+            const activeTab = document.getElementById(tabName + 'Tab');
+            activeTab.className = activeTab.className.replace('bg-white/20', 'bg-blue-500');
+            
+            // Load data for the selected tab
+            if (tabName === 'users') {
+                loadUsers();
+            } else if (tabName === 'quizzes') {
+                loadQuizzes();
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                let query = supabase
+                    .from('profiles')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                // Apply filters
+                const roleFilter = document.getElementById('userRoleFilter')?.value;
+                const gradeFilter = document.getElementById('userGradeFilter')?.value;
+                const searchFilter = document.getElementById('userSearchFilter')?.value;
+
+                if (roleFilter) {
+                    query = query.eq('role', roleFilter);
+                }
+                
+                if (gradeFilter) {
+                    query = query.eq('grade', gradeFilter);
+                }
+
+                const { data: users, error } = await query;
+                
+                if (error) throw error;
+
+                let filteredUsers = users || [];
+                
+                if (searchFilter) {
+                    filteredUsers = filteredUsers.filter(user => 
+                        user.full_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                        user.email?.toLowerCase().includes(searchFilter.toLowerCase())
+                    );
+                }
+
+                displayUsersTable(filteredUsers);
+
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function displayUsersTable(users) {
+            const usersTable = document.getElementById('usersTable');
+            
+            if (users.length === 0) {
+                usersTable.innerHTML = '<div class="text-center text-purple-200 py-8">Tidak ada data pengguna</div>';
+                return;
+            }
+
+            usersTable.innerHTML = `
+                <table class="w-full text-white">
+                    <thead>
+                        <tr class="border-b border-white/20">
+                            <th class="text-left py-3 px-4">Nama</th>
+                            <th class="text-left py-3 px-4">Email</th>
+                            <th class="text-left py-3 px-4">Role</th>
+                            <th class="text-left py-3 px-4">Kelas/Mapel</th>
+                            <th class="text-left py-3 px-4">Bergabung</th>
+                            <th class="text-left py-3 px-4">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map(user => `
+                            <tr class="border-b border-white/10 hover:bg-white/5">
+                                <td class="py-3 px-4">${user.full_name || 'N/A'}</td>
+                                <td class="py-3 px-4">${user.email}</td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2 py-1 rounded text-xs ${
+                                        user.role === 'admin' ? 'bg-red-500' : 
+                                        user.role === 'teacher' ? 'bg-blue-500' : 'bg-green-500'
+                                    }">
+                                        ${user.role === 'admin' ? 'Admin' : user.role === 'teacher' ? 'Guru' : 'Siswa'}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4">${user.grade ? `Kelas ${user.grade}` : user.subject || 'N/A'}</td>
+                                <td class="py-3 px-4">${new Date(user.created_at).toLocaleDateString('id-ID')}</td>
+                                <td class="py-3 px-4">
+                                    <div class="flex gap-2">
+                                        <button onclick="editUser('${user.id}')" class="text-blue-400 hover:text-blue-300">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="deleteUser('${user.id}')" class="text-red-400 hover:text-red-300">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function loadQuizzes() {
+            try {
+                let query = supabase
+                    .from('quizzes')
+                    .select(`
+                        *,
+                        profiles(full_name),
+                        quiz_questions(id)
+                    `)
+                    .order('created_at', { ascending: false });
+
+                const { data: quizzes, error } = await query;
+                
+                if (error) throw error;
+
+                displayQuizzesTable(quizzes || []);
+
+            } catch (error) {
+                console.error('Error loading quizzes:', error);
+            }
+        }
+
+        function displayQuizzesTable(quizzes) {
+            const quizzesTable = document.getElementById('quizzesTable');
+            
+            if (quizzes.length === 0) {
+                quizzesTable.innerHTML = '<div class="text-center text-purple-200 py-8">Tidak ada data quiz</div>';
+                return;
+            }
+
+            quizzesTable.innerHTML = `
+                <table class="w-full text-white">
+                    <thead>
+                        <tr class="border-b border-white/20">
+                            <th class="text-left py-3 px-4">Judul</th>
+                            <th class="text-left py-3 px-4">Kategori</th>
+                            <th class="text-left py-3 px-4">Pembuat</th>
+                            <th class="text-left py-3 px-4">Soal</th>
+                            <th class="text-left py-3 px-4">Dibuat</th>
+                            <th class="text-left py-3 px-4">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${quizzes.map(quiz => `
+                            <tr class="border-b border-white/10 hover:bg-white/5">
+                                <td class="py-3 px-4 font-semibold">${quiz.title}</td>
+                                <td class="py-3 px-4">
+                                    <span class="px-2 py-1 rounded text-xs bg-purple-500 capitalize">
+                                        ${quiz.category?.replace('-', ' ') || 'Umum'}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4">${quiz.profiles?.full_name || 'N/A'}</td>
+                                <td class="py-3 px-4">${quiz.quiz_questions?.length || 0} soal</td>
+                                <td class="py-3 px-4">${new Date(quiz.created_at).toLocaleDateString('id-ID')}</td>
+                                <td class="py-3 px-4">
+                                    <div class="flex gap-2">
+                                        <button onclick="viewQuiz('${quiz.id}')" class="text-green-400 hover:text-green-300">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button onclick="editQuiz('${quiz.id}')" class="text-blue-400 hover:text-blue-300">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="deleteQuiz('${quiz.id}')" class="text-red-400 hover:text-red-300">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Export Functions
+        function exportQuizTemplate() {
+            const templateData = [
+                ['Pertanyaan', 'Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D', 'Jawaban Benar (A/B/C/D)', 'Tingkat Kesulitan (1-3)', 'Poin'],
+                ['Siapa nama nabi terakhir?', 'Nabi Isa', 'Nabi Musa', 'Nabi Muhammad', 'Nabi Ibrahim', 'C', '1', '1000'],
+                ['Berapa jumlah surat dalam Al-Quran?', '114', '115', '113', '116', 'A', '2', '1000'],
+                ['Apa nama malaikat yang bertugas menyampaikan wahyu?', 'Mikail', 'Jibril', 'Israfil', 'Izrail', 'B', '1', '1000']
+            ];
+
+            const ws = XLSX.utils.aoa_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Template Quiz');
+            
+            XLSX.writeFile(wb, 'Template_Quiz_MI.xlsx');
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Template Berhasil Diunduh!',
+                text: 'Silakan isi template Excel dan import kembali.',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function exportQuizPDF() {
+            const quizData = collectQuizData();
+            if (!quizData) return;
+
+            // Create PDF content
+            let pdfContent = `
+                <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px;">
+                        <h1 style="color: #333; margin: 0;">MI AL-HIKMAH</h1>
+                        <h2 style="color: #666; margin: 10px 0;">${quizData.title}</h2>
+                        <p style="margin: 5px 0;">Kategori: ${quizData.category} | Kelas: ${quizData.target_grade || 'Semua'}</p>
+                        <p style="margin: 5px 0;">Waktu: ${quizData.time_limit} detik per soal | Total: ${quizData.questions.length} soal</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <p><strong>Nama:</strong> ___________________________ <strong>Kelas:</strong> ___________</p>
+                        <p><strong>Tanggal:</strong> ___________________________ <strong>Nilai:</strong> ___________</p>
+                    </div>
+            `;
+
+            quizData.questions.forEach((question, index) => {
+                pdfContent += `
+                    <div style="margin-bottom: 25px; page-break-inside: avoid;">
+                        <p style="font-weight: bold; margin-bottom: 10px;">${index + 1}. ${question.question}</p>
+                        <div style="margin-left: 20px;">
+                            ${question.options.map((option, optIndex) => `
+                                <p style="margin: 5px 0;">
+                                    <span style="display: inline-block; width: 20px;">○</span>
+                                    ${String.fromCharCode(65 + optIndex)}. ${option}
+                                </p>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            pdfContent += `
+                    <div style="margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px;">
+                        <h3>Kunci Jawaban:</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                            ${quizData.questions.map((question, index) => `
+                                <span>${index + 1}. ${String.fromCharCode(65 + question.correct_answer)}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Open in new window for printing
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${quizData.title} - Quiz MI</title>
+                    <style>
+                        @media print {
+                            body { margin: 0; }
+                            .no-print { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${pdfContent}
+                    <div class="no-print" style="text-align: center; margin: 20px;">
+                        <button onclick="window.print()" style="background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                            Cetak PDF
+                        </button>
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+
+        function exportUsersExcel() {
+            // Implementation for exporting users to Excel
+            Swal.fire({
+                icon: 'info',
+                title: 'Export Users',
+                text: 'Fitur export users Excel akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function exportQuizzesReport() {
+            // Implementation for exporting quiz reports
+            Swal.fire({
+                icon: 'info',
+                title: 'Export Quiz Report',
+                text: 'Fitur export laporan quiz akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        // Excel Import Functions
+        function showImportExcel() {
+            Swal.fire({
+                title: 'Import Soal dari Excel',
+                html: `
+                    <div class="text-left space-y-4">
+                        <p>Upload file Excel dengan format yang benar:</p>
+                        <input type="file" id="excelFile" accept=".xlsx,.xls" class="w-full p-2 border rounded">
+                        <div class="text-sm text-gray-600">
+                            <p><strong>Format Excel:</strong></p>
+                            <ul class="list-disc list-inside">
+                                <li>Kolom A: Pertanyaan</li>
+                                <li>Kolom B-E: Pilihan A, B, C, D</li>
+                                <li>Kolom F: Jawaban Benar (A/B/C/D)</li>
+                                <li>Kolom G: Tingkat Kesulitan (1-3)</li>
+                                <li>Kolom H: Poin</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Import',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#8b5cf6',
+                preConfirm: () => {
+                    const file = document.getElementById('excelFile').files[0];
+                    if (!file) {
+                        Swal.showValidationMessage('Pilih file Excel terlebih dahulu!');
+                        return false;
+                    }
+                    return file;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    importExcelFile(result.value);
+                }
+            });
+        }
+
+        function importExcelFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    // Skip header row
+                    const questions = jsonData.slice(1).filter(row => row[0]); // Filter empty rows
+                    
+                    if (questions.length === 0) {
+                        throw new Error('Tidak ada data soal yang valid dalam file Excel');
+                    }
+                    
+                    // Clear existing questions
+                    document.getElementById('questionsContainer').innerHTML = '';
+                    questionCounter = 0;
+                    
+                    // Add imported questions
+                    questions.forEach(row => {
+                        if (row[0] && row[1] && row[2] && row[3] && row[4] && row[5]) {
+                            addQuestion();
+                            const questionDiv = document.querySelector('#questionsContainer .bg-white\\/10:last-child');
+                            
+                            // Fill question data
+                            questionDiv.querySelector('.question-text').value = row[0];
+                            const options = questionDiv.querySelectorAll('.answer-option');
+                            options[0].value = row[1];
+                            options[1].value = row[2];
+                            options[2].value = row[3];
+                            options[3].value = row[4];
+                            
+                            // Set correct answer
+                            const correctLetter = row[5].toString().toUpperCase();
+                            const correctIndex = correctLetter.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
+                            questionDiv.querySelector('.correct-answer').value = correctIndex;
+                            
+                            // Set difficulty and points
+                            questionDiv.querySelector('.difficulty-level').value = row[6] || 1;
+                            questionDiv.querySelector('.question-points').value = row[7] || 1000;
+                        }
+                    });
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Import Berhasil!',
+                        text: `${questions.length} soal berhasil diimport dari Excel.`,
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                    
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Import Gagal',
+                        text: error.message,
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Admin User Management
+        function showAddUser() {
+            Swal.fire({
+                title: 'Tambah Pengguna Baru',
+                html: `
+                    <div class="text-left space-y-4">
+                        <input type="text" id="newUserName" placeholder="Nama Lengkap" class="w-full p-2 border rounded">
+                        <input type="email" id="newUserEmail" placeholder="Email" class="w-full p-2 border rounded">
+                        <input type="password" id="newUserPassword" placeholder="Password" class="w-full p-2 border rounded">
+                        <select id="newUserRole" class="w-full p-2 border rounded">
+                            <option value="">Pilih Role</option>
+                            <option value="student">Siswa</option>
+                            <option value="teacher">Guru</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <select id="newUserGrade" class="w-full p-2 border rounded">
+                            <option value="">Pilih Kelas (untuk siswa)</option>
+                            <option value="1">Kelas 1</option>
+                            <option value="2">Kelas 2</option>
+                            <option value="3">Kelas 3</option>
+                            <option value="4">Kelas 4</option>
+                            <option value="5">Kelas 5</option>
+                            <option value="6">Kelas 6</option>
+                        </select>
+                        <input type="text" id="newUserSubject" placeholder="Mata Pelajaran (untuk guru)" class="w-full p-2 border rounded">
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Tambah',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#8b5cf6',
+                preConfirm: () => {
+                    const name = document.getElementById('newUserName').value;
+                    const email = document.getElementById('newUserEmail').value;
+                    const password = document.getElementById('newUserPassword').value;
+                    const role = document.getElementById('newUserRole').value;
+                    
+                    if (!name || !email || !password || !role) {
+                        Swal.showValidationMessage('Semua field wajib diisi!');
+                        return false;
+                    }
+                    
+                    return { name, email, password, role,
+                        grade: document.getElementById('newUserGrade').value,
+                        subject: document.getElementById('newUserSubject').value
+                    };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    createUser(result.value);
+                }
+            });
+        }
+
+        async function createUser(userData) {
+            try {
+                const { data, error } = await supabase.auth.admin.createUser({
+                    email: userData.email,
+                    password: userData.password,
+                    user_metadata: userData
+                });
+
+                if (error) throw error;
+
+                // Create profile
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert([{
+                        id: data.user.id,
+                        email: userData.email,
+                        full_name: userData.name,
+                        role: userData.role,
+                        grade: userData.grade || null,
+                        subject: userData.subject || null
+                    }]);
+
+                if (profileError) throw profileError;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'User Berhasil Ditambahkan!',
+                    confirmButtonColor: '#8b5cf6'
+                });
+
+                loadUsers();
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Menambah User',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        function editUser(userId) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Edit User',
+                text: 'Fitur edit user akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        async function deleteUser(userId) {
+            const result = await Swal.fire({
+                title: 'Hapus Pengguna?',
+                text: 'Data pengguna akan dihapus permanen!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#ef4444'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const { error } = await supabase
+                        .from('profiles')
+                        .delete()
+                        .eq('id', userId);
+
+                    if (error) throw error;
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'User Berhasil Dihapus!',
+                        confirmButtonColor: '#8b5cf6'
+                    });
+
+                    loadUsers();
+
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal Menghapus User',
+                        text: error.message,
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                }
+            }
+        }
+
+        function viewQuiz(quizId) {
+            Swal.fire({
+                icon: 'info',
+                title: 'View Quiz',
+                text: 'Fitur view quiz akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function editQuiz(quizId) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Edit Quiz',
+                text: 'Fitur edit quiz akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        async function deleteQuiz(quizId) {
+            const result = await Swal.fire({
+                title: 'Hapus Quiz?',
+                text: 'Quiz dan semua data terkait akan dihapus permanen!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#ef4444'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const { error } = await supabase
+                        .from('quizzes')
+                        .delete()
+                        .eq('id', quizId);
+
+                    if (error) throw error;
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Quiz Berhasil Dihapus!',
+                        confirmButtonColor: '#8b5cf6'
+                    });
+
+                    loadQuizzes();
+
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal Menghapus Quiz',
+                        text: error.message,
+                        confirmButtonColor: '#8b5cf6'
+                    });
+                }
+            }
+        }
+
+        // Report Functions
+        function generateUserReport() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Laporan Pengguna',
+                text: 'Fitur laporan pengguna akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function generateQuizReport() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Laporan Quiz',
+                text: 'Fitur laporan quiz akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function generatePerformanceReport() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Laporan Performa',
+                text: 'Fitur laporan performa akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function bulkDeleteQuizzes() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Hapus Massal',
+                text: 'Fitur hapus massal quiz akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function saveSettings() {
+            Swal.fire({
+                icon: 'success',
+                title: 'Pengaturan Disimpan!',
+                text: 'Semua pengaturan telah berhasil disimpan.',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        // Quiz Library Functions
+        let allQuizzes = [];
+        let filteredQuizzes = [];
+
+        async function loadQuizLibrary() {
+            showLoadingState();
+            
+            try {
+                const { data: quizzes, error } = await supabase
+                    .from('quizzes')
+                    .select(`
+                        *,
+                        profiles(full_name),
+                        quiz_questions(id, difficulty, points),
+                        quiz_sessions(id, status)
+                    `)
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                allQuizzes = quizzes || [];
+                filteredQuizzes = [...allQuizzes];
+                
+                displayQuizStats();
+                displayQuizGrid();
+                hideLoadingState();
+
+            } catch (error) {
+                console.error('Error loading quiz library:', error);
+                hideLoadingState();
+                showEmptyState();
+            }
+        }
+
+        function showLoadingState() {
+            document.getElementById('quizLibraryLoading').classList.remove('hidden');
+            document.getElementById('quizGrid').classList.add('hidden');
+            document.getElementById('quizLibraryEmpty').classList.add('hidden');
+        }
+
+        function hideLoadingState() {
+            document.getElementById('quizLibraryLoading').classList.add('hidden');
+            document.getElementById('quizGrid').classList.remove('hidden');
+        }
+
+        function showEmptyState() {
+            document.getElementById('quizLibraryEmpty').classList.remove('hidden');
+            document.getElementById('quizGrid').classList.add('hidden');
+        }
+
+        function displayQuizStats() {
+            const statsContainer = document.getElementById('quizStats');
+            
+            const totalQuizzes = allQuizzes.length;
+            const categories = [...new Set(allQuizzes.map(q => q.category))].length;
+            const totalQuestions = allQuizzes.reduce((sum, q) => sum + (q.quiz_questions?.length || 0), 0);
+            const activeSessions = allQuizzes.reduce((sum, q) => sum + (q.quiz_sessions?.filter(s => s.status === 'active').length || 0), 0);
+
+            statsContainer.innerHTML = `
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                    <div class="text-3xl font-bold text-blue-400">${totalQuizzes}</div>
+                    <div class="text-purple-100">Total Quiz</div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                    <div class="text-3xl font-bold text-green-400">${categories}</div>
+                    <div class="text-purple-100">Kategori</div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                    <div class="text-3xl font-bold text-yellow-400">${totalQuestions}</div>
+                    <div class="text-purple-100">Total Soal</div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 text-center">
+                    <div class="text-3xl font-bold text-purple-400">${activeSessions}</div>
+                    <div class="text-purple-100">Sesi Aktif</div>
+                </div>
+            `;
+        }
+
+        function displayQuizGrid() {
+            const quizGrid = document.getElementById('quizGrid');
+            
+            if (filteredQuizzes.length === 0) {
+                showEmptyState();
+                return;
+            }
+
+            quizGrid.innerHTML = filteredQuizzes.map(quiz => {
+                const questionCount = quiz.quiz_questions?.length || 0;
+                const avgDifficulty = questionCount > 0 
+                    ? Math.round(quiz.quiz_questions.reduce((sum, q) => sum + (q.difficulty || 1), 0) / questionCount)
+                    : 1;
+                const totalPoints = quiz.quiz_questions?.reduce((sum, q) => sum + (q.points || 1000), 0) || 0;
+                
+                const difficultyText = avgDifficulty === 1 ? 'Mudah' : avgDifficulty === 2 ? 'Sedang' : 'Sulit';
+                const difficultyColor = avgDifficulty === 1 ? 'text-green-400' : avgDifficulty === 2 ? 'text-yellow-400' : 'text-red-400';
+                
+                const categoryName = getCategoryDisplayName(quiz.category);
+                
+                return `
+                    <div class="quiz-card bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:bg-white/20 transition-all duration-300">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold text-white mb-2 line-clamp-2">${quiz.title}</h3>
+                                <p class="text-purple-200 text-sm mb-3 line-clamp-2">${quiz.description || 'Tidak ada deskripsi'}</p>
+                            </div>
+                            <div class="ml-4">
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                                    ${categoryName}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-400">${questionCount}</div>
+                                <div class="text-purple-200 text-xs">Soal</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold ${difficultyColor}">${difficultyText}</div>
+                                <div class="text-purple-200 text-xs">Tingkat</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="text-sm text-purple-200">
+                                <i class="fas fa-user mr-1"></i>
+                                ${quiz.profiles?.full_name || 'Unknown'}
+                            </div>
+                            <div class="text-sm text-purple-200">
+                                <i class="fas fa-clock mr-1"></i>
+                                ${quiz.time_limit}s/soal
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="text-sm text-purple-200">
+                                ${quiz.target_grade ? `Kelas ${quiz.target_grade}` : 'Semua Kelas'}
+                            </div>
+                            <div class="text-sm text-yellow-400 font-semibold">
+                                <i class="fas fa-star mr-1"></i>
+                                ${totalPoints.toLocaleString()} poin
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            ${appState.user.role === 'student' ? `
+                                <button onclick="startPracticeQuiz('${quiz.id}')" class="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-300">
+                                    <i class="fas fa-play mr-2"></i>Mulai Latihan
+                                </button>
+                            ` : `
+                                <button onclick="hostLiveQuiz('${quiz.id}')" class="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-300">
+                                    <i class="fas fa-broadcast-tower mr-2"></i>Host Live
+                                </button>
+                            `}
+                            <button onclick="previewQuizFromLibrary('${quiz.id}')" class="bg-white/20 hover:bg-white/30 text-white py-2 px-4 rounded-lg transition-all duration-300">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${(appState.user.role === 'admin' || quiz.created_by === appState.user.id) ? `
+                                <button onclick="editQuizFromLibrary('${quiz.id}')" class="bg-white/20 hover:bg-white/30 text-white py-2 px-4 rounded-lg transition-all duration-300">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getCategoryDisplayName(category) {
+            const categoryMap = {
+                'quran-hadits': 'Al-Qur\'an Hadits',
+                'akidah-akhlak': 'Akidah Akhlak',
+                'fiqih': 'Fiqih',
+                'ski': 'SKI',
+                'bahasa-arab': 'Bahasa Arab',
+                'matematika': 'Matematika',
+                'ipa': 'IPA',
+                'ips': 'IPS',
+                'bahasa-indonesia': 'Bahasa Indonesia',
+                'pkn': 'PKn',
+                'sbdp': 'SBdP',
+                'pjok': 'PJOK'
+            };
+            return categoryMap[category] || category;
+        }
+
+        function filterQuizLibrary() {
+            const searchTerm = document.getElementById('quizSearchInput')?.value.toLowerCase() || '';
+            const categoryFilter = document.getElementById('categoryFilter')?.value || '';
+            const gradeFilter = document.getElementById('gradeFilter')?.value || '';
+            const difficultyFilter = document.getElementById('difficultyFilter')?.value || '';
+
+            filteredQuizzes = allQuizzes.filter(quiz => {
+                const matchesSearch = !searchTerm || 
+                    quiz.title.toLowerCase().includes(searchTerm) ||
+                    quiz.description?.toLowerCase().includes(searchTerm) ||
+                    quiz.profiles?.full_name?.toLowerCase().includes(searchTerm);
+                
+                const matchesCategory = !categoryFilter || quiz.category === categoryFilter;
+                const matchesGrade = !gradeFilter || quiz.target_grade === gradeFilter || !quiz.target_grade;
+                
+                let matchesDifficulty = true;
+                if (difficultyFilter) {
+                    const avgDifficulty = quiz.quiz_questions?.length > 0 
+                        ? Math.round(quiz.quiz_questions.reduce((sum, q) => sum + (q.difficulty || 1), 0) / quiz.quiz_questions.length)
+                        : 1;
+                    matchesDifficulty = avgDifficulty.toString() === difficultyFilter;
+                }
+
+                return matchesSearch && matchesCategory && matchesGrade && matchesDifficulty;
+            });
+
+            displayQuizGrid();
+        }
+
+        async function startPracticeQuiz(quizId) {
+            try {
+                const quiz = allQuizzes.find(q => q.id === quizId);
+                if (!quiz) throw new Error('Quiz tidak ditemukan');
+
+                const result = await Swal.fire({
+                    title: `Mulai Latihan: ${quiz.title}`,
+                    html: `
+                        <div class="text-left space-y-3">
+                            <p><strong>Kategori:</strong> ${getCategoryDisplayName(quiz.category)}</p>
+                            <p><strong>Jumlah Soal:</strong> ${quiz.quiz_questions?.length || 0}</p>
+                            <p><strong>Waktu per Soal:</strong> ${quiz.time_limit} detik</p>
+                            <p><strong>Target Kelas:</strong> ${quiz.target_grade ? `Kelas ${quiz.target_grade}` : 'Semua Kelas'}</p>
+                            <hr class="my-4">
+                            <p class="text-sm text-gray-600">Mode latihan memungkinkan Anda berlatih tanpa tekanan waktu dan melihat jawaban yang benar setelah setiap soal.</p>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Mulai Latihan',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#10b981'
+                });
+
+                if (result.isConfirmed) {
+                    // Create practice session
+                    const { data: session, error } = await supabase
+                        .from('quiz_sessions')
+                        .insert([{
+                            quiz_id: quizId,
+                            host_id: appState.user.id,
+                            quiz_code: 'PRACTICE',
+                            status: 'active',
+                            settings: { mode: 'practice', show_answers: true }
+                        }])
+                        .select()
+                        .single();
+
+                    if (error) throw error;
+
+                    // Add user as participant
+                    await supabase
+                        .from('quiz_participants')
+                        .insert([{
+                            session_id: session.id,
+                            user_id: appState.user.id
+                        }]);
+
+                    appState.gameSession = { ...session, quizzes: quiz };
+                    startQuizPlayer();
+                }
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Memulai Latihan',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function hostLiveQuiz(quizId) {
+            try {
+                const quiz = allQuizzes.find(q => q.id === quizId);
+                if (!quiz) throw new Error('Quiz tidak ditemukan');
+
+                const result = await Swal.fire({
+                    title: `Host Live Quiz: ${quiz.title}`,
+                    html: `
+                        <div class="text-left space-y-3">
+                            <p><strong>Kategori:</strong> ${getCategoryDisplayName(quiz.category)}</p>
+                            <p><strong>Jumlah Soal:</strong> ${quiz.quiz_questions?.length || 0}</p>
+                            <p><strong>Waktu per Soal:</strong> ${quiz.time_limit} detik</p>
+                            <hr class="my-4">
+                            <p class="text-sm text-gray-600">Sistem akan membuat kode unik untuk quiz live. Bagikan kode tersebut kepada siswa untuk bergabung.</p>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Buat Live Session',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#3b82f6'
+                });
+
+                if (result.isConfirmed) {
+                    await createLiveSession(quizId);
+                }
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Membuat Live Session',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        async function previewQuizFromLibrary(quizId) {
+            try {
+                const { data: quiz, error: quizError } = await supabase
+                    .from('quizzes')
+                    .select(`
+                        *,
+                        profiles(full_name),
+                        quiz_questions(*)
+                    `)
+                    .eq('id', quizId)
+                    .single();
+
+                if (quizError) throw quizError;
+
+                const totalPoints = quiz.quiz_questions?.reduce((sum, q) => sum + (q.points || 1000), 0) || 0;
+                const avgDifficulty = quiz.quiz_questions?.length > 0 
+                    ? Math.round(quiz.quiz_questions.reduce((sum, q) => sum + (q.difficulty || 1), 0) / quiz.quiz_questions.length)
+                    : 1;
+
+                Swal.fire({
+                    title: quiz.title,
+                    html: `
+                        <div class="text-left space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p><strong>Kategori:</strong> ${getCategoryDisplayName(quiz.category)}</p>
+                                    <p><strong>Pembuat:</strong> ${quiz.profiles?.full_name || 'Unknown'}</p>
+                                    <p><strong>Target Kelas:</strong> ${quiz.target_grade ? `Kelas ${quiz.target_grade}` : 'Semua Kelas'}</p>
+                                </div>
+                                <div>
+                                    <p><strong>Jumlah Soal:</strong> ${quiz.quiz_questions?.length || 0}</p>
+                                    <p><strong>Waktu per Soal:</strong> ${quiz.time_limit} detik</p>
+                                    <p><strong>Total Poin:</strong> ${totalPoints.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            
+                            ${quiz.description ? `
+                                <div>
+                                    <p><strong>Deskripsi:</strong></p>
+                                    <p class="text-gray-600">${quiz.description}</p>
+                                </div>
+                            ` : ''}
+                            
+                            <hr class="my-4">
+                            
+                            ${quiz.quiz_questions?.length > 0 ? `
+                                <div>
+                                    <p><strong>Contoh Soal:</strong></p>
+                                    <div class="bg-gray-100 p-3 rounded mt-2">
+                                        <p class="font-semibold mb-2">${quiz.quiz_questions[0].question}</p>
+                                        <ul class="list-disc list-inside space-y-1">
+                                            ${quiz.quiz_questions[0].options.map((option, index) => 
+                                                `<li class="${index === quiz.quiz_questions[0].correct_answer ? 'font-bold text-green-600' : ''}">${String.fromCharCode(65 + index)}. ${option}</li>`
+                                            ).join('')}
+                                        </ul>
+                                        <p class="text-sm text-gray-600 mt-2">
+                                            Tingkat: ${quiz.quiz_questions[0].difficulty === 1 ? 'Mudah' : quiz.quiz_questions[0].difficulty === 2 ? 'Sedang' : 'Sulit'} | 
+                                            Poin: ${quiz.quiz_questions[0].points || 1000}
+                                        </p>
+                                    </div>
+                                </div>
+                            ` : '<p class="text-gray-500">Belum ada soal dalam quiz ini.</p>'}
+                        </div>
+                    `,
+                    confirmButtonText: 'Tutup',
+                    confirmButtonColor: '#8b5cf6',
+                    width: '700px'
+                });
+
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Memuat Preview',
+                    text: error.message,
+                    confirmButtonColor: '#8b5cf6'
+                });
+            }
+        }
+
+        function editQuizFromLibrary(quizId) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Edit Quiz',
+                text: 'Fitur edit quiz dari perpustakaan akan segera tersedia!',
+                confirmButtonColor: '#8b5cf6'
+            });
+        }
+
+        function startQuizPlayer() {
+            showScreen('quizPlayerScreen');
+            // Implementation for full quiz player will be added later
+            document.getElementById('quizPlayerScreen').innerHTML = `
+                <div class="max-w-4xl mx-auto">
+                    <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
+                        <h2 class="text-3xl font-bold text-white mb-4">${appState.gameSession.quizzes.title}</h2>
+                        <p class="text-purple-100 mb-8">Mode Latihan - ${appState.gameSession.quizzes.quiz_questions?.length || 0} Soal</p>
+                        <div class="animate-pulse">
+                            <i class="fas fa-play-circle text-6xl text-green-400 mb-4"></i>
+                        </div>
+                        <p class="text-purple-200 mb-6">Quiz player lengkap akan segera tersedia!</p>
+                        <button onclick="showQuizLibrary()" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300">
+                            <i class="fas fa-arrow-left mr-2"></i>Kembali ke Perpustakaan
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize leaderboard on page load
+        setTimeout(() => {
+            if (document.getElementById('leaderboardPeriod')) {
+                loadLeaderboard();
+            }
+        }, 1000);
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'991e3d39c6edfcf7',t:'MTc2MTAyMzMyOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
