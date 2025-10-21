@@ -1847,7 +1847,12 @@
             if (!quizData) return;
 
             try {
-                // Save quiz to database
+                // Check if user is logged in
+                if (!appState.user || !appState.user.id) {
+                    throw new Error('Anda harus login terlebih dahulu untuk menyimpan quiz');
+                }
+
+                // Save quiz to database with is_active flag
                 const { data: quiz, error: quizError } = await supabase
                     .from('quizzes')
                     .insert([{
@@ -1858,30 +1863,46 @@
                         target_grade: quizData.target_grade,
                         shuffle_questions: quizData.shuffle_questions,
                         show_correct_answer: quizData.show_correct_answer,
+                        is_active: true,
                         created_by: appState.user.id,
                         created_at: new Date().toISOString()
                     }])
                     .select()
                     .single();
 
-                if (quizError) throw quizError;
+                if (quizError) {
+                    console.error('Quiz insert error:', quizError);
+                    throw new Error(`Gagal menyimpan quiz: ${quizError.message}`);
+                }
+
+                if (!quiz || !quiz.id) {
+                    throw new Error('Quiz berhasil dibuat tetapi tidak mendapat ID. Silakan coba lagi.');
+                }
 
                 // Save questions
-                const questionsToInsert = quizData.questions.map((q, index) => ({
-                    quiz_id: quiz.id,
-                    question: q.question,
-                    options: q.options,
-                    correct_answer: q.correct_answer,
-                    difficulty: q.difficulty,
-                    points: q.points,
-                    order_index: index
-                }));
+                if (quizData.questions && quizData.questions.length > 0) {
+                    const questionsToInsert = quizData.questions.map((q, index) => ({
+                        quiz_id: quiz.id,
+                        question: q.question,
+                        options: q.options,
+                        correct_answer: q.correct_answer,
+                        difficulty: q.difficulty,
+                        points: q.points,
+                        order_index: index,
+                        created_at: new Date().toISOString()
+                    }));
 
-                const { error: questionsError } = await supabase
-                    .from('quiz_questions')
-                    .insert(questionsToInsert);
+                    const { error: questionsError } = await supabase
+                        .from('quiz_questions')
+                        .insert(questionsToInsert);
 
-                if (questionsError) throw questionsError;
+                    if (questionsError) {
+                        console.error('Questions insert error:', questionsError);
+                        // Try to delete the quiz if questions failed to save
+                        await supabase.from('quizzes').delete().eq('id', quiz.id);
+                        throw new Error(`Gagal menyimpan soal: ${questionsError.message}`);
+                    }
+                }
 
                 Swal.fire({
                     icon: 'success',
@@ -1893,10 +1914,11 @@
                 });
 
             } catch (error) {
+                console.error('Save quiz error:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Gagal Menyimpan Quiz',
-                    text: error.message,
+                    text: error.message || 'Terjadi kesalahan saat menyimpan quiz. Silakan coba lagi.',
                     confirmButtonColor: '#8b5cf6'
                 });
             }
@@ -3555,5 +3577,5 @@
             }
         }, 1000);
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'991e3d39c6edfcf7',t:'MTc2MTAyMzMyOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
